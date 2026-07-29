@@ -13,7 +13,7 @@ type Results = { event: { name: string }; tally: TallyRow[] }
 const CODE_LENGTH = 8
 
 /**
- * How often a phone asks whether the organiser has revealed yet.
+ * How often a phone asks what has happened to the event it is on.
  *
  * The projector polls every three seconds because there is one of it and a room
  * is watching it. A phone has two hundred copies of itself on the same venue
@@ -40,6 +40,10 @@ export function Vote({ eventId }: { eventId: string | null }) {
   // The bar stays mounted through its exit tween, so dismissing it is a state of
   // its own rather than the absence of a selection.
   const [closingBar, setClosingBar] = useState(false)
+  // Read by the watcher below, which must not restart its interval every time
+  // the voter moves between the entry screen and the ballot.
+  const phaseRef = useRef(phase)
+  phaseRef.current = phase
 
   // Always asked for by event. A cookie left over from another event is refused
   // rather than answered, which is what stops a voter holding a live session
@@ -106,38 +110,75 @@ export function Vote({ eventId }: { eventId: string | null }) {
 
   const currentEventId = event?.id ?? null
 
-  // Only while there is something to wait for. A draft is excluded because it
-  // cannot be revealed without being opened first, so polling it is traffic that
-  // can never come back with anything.
-  const waitingForReveal =
+  // Every phone that is on this event and not already showing the standings.
+  //
+  // The receipt and the closed screen are the obvious two. The entry screen and
+  // the ballot are here because of "Close now": closing early does not move
+  // closesAt, so a phone left on the ballot goes on counting down towards a
+  // deadline that no longer means anything, and a phone that never redeemed a
+  // code has nothing to count down at all. Neither of them would ever ask the
+  // server another question, so neither would find out the event was revealed.
+  //
+  // A draft is excluded, and only a draft: it cannot be revealed without being
+  // opened first, so watching it is traffic that can never come back with
+  // anything.
+  const watching =
     results === null &&
     event !== null &&
     event.status !== 'draft' &&
-    (phase === 'done' || phase === 'unavailable')
+    (phase === 'entry' || phase === 'ballot' || phase === 'done' || phase === 'unavailable')
 
   /**
-   * Waits for the reveal, then shows it, so a phone that voted turns into the
-   * standings by itself rather than telling its owner to go and look elsewhere.
+   * Watches the event this phone is on, and follows it to the end.
    *
-   * Stops on the first success and never starts again: ResultsBars animates its
-   * rows in, and a re-render landing mid-animation leaves them stranded part-way.
-   * Screen.tsx guards the projector against exactly this.
+   * Two things can arrive here. The standings, which replace whatever is on
+   * screen, so a phone turns into the results by itself rather than telling its
+   * owner to go and look elsewhere. And the news that voting is no longer live,
+   * which matters because the organiser can close early: the ballot has to stop
+   * offering a vote the server will refuse, and the countdown has to stop
+   * running towards a deadline that has been overtaken.
+   *
+   * Stops on the first set of results and never starts again: ResultsBars
+   * animates its rows in, and a re-render landing mid-animation leaves them
+   * stranded part-way. Screen.tsx guards the projector against exactly this.
    */
   useEffect(() => {
-    if (!waitingForReveal || !currentEventId) return
+    if (!watching || !currentEventId) return
     let cancelled = false
 
     async function poll() {
       // A locked phone polling costs the venue wifi and tells nobody anything.
       if (document.visibilityState === 'hidden') return
 
-      const revealed = await api.get<Results>(`/api/results/${currentEventId}`)
-      // Anything other than success means not published yet, which is the normal
-      // case for most of the wait and is not worth showing anybody.
-      if (cancelled || !revealed.ok) return
+      const current = await api.get<PublicEvent>(`/api/event/${currentEventId}`)
+      if (cancelled || !current.ok) return
 
-      setResults(revealed.data)
-      setPhase('results')
+      if (current.data.status === 'revealed') {
+        const revealed = await api.get<Results>(`/api/results/${currentEventId}`)
+        // A 403 here would mean the reveal was undone, which the state machine
+        // does not allow. Anything else is a network blip: keep waiting.
+        if (cancelled || !revealed.ok) return
+        setResults(revealed.data)
+        setPhase('results')
+        return
+      }
+
+      // Only on a real change. Replacing the object every eight seconds would
+      // re-render this whole screen for the length of the event to say nothing.
+      setEvent((previous) =>
+        previous &&
+        previous.status === current.data.status &&
+        previous.votingLive === current.data.votingLive
+          ? previous
+          : current.data,
+      )
+
+      // Closed while somebody was still choosing, or still typing their code.
+      // Both screens are now offering something that cannot happen.
+      if (!current.data.votingLive && (phaseRef.current === 'entry' || phaseRef.current === 'ballot')) {
+        setPhase('unavailable')
+        setError(messageFor('VOTING_CLOSED'))
+      }
     }
 
     void poll()
@@ -151,7 +192,7 @@ export function Vote({ eventId }: { eventId: string | null }) {
       window.clearInterval(timer)
       document.removeEventListener('visibilitychange', poll)
     }
-  }, [waitingForReveal, currentEventId])
+  }, [watching, currentEventId])
 
   async function submitCode(submittedEvent: React.FormEvent) {
     submittedEvent.preventDefault()
@@ -219,6 +260,14 @@ export function Vote({ eventId }: { eventId: string | null }) {
       // rather than leaving a dead ballot on screen.
       if (result.error === 'ALREADY_VOTED') {
         setPhase('done')
+        return
+      }
+      // The organiser closed voting between this ballot being drawn and this
+      // button being pressed. Leaving the ballot up would invite the voter to
+      // press it again; the closed screen is also the screen that waits for the
+      // standings, so this is the last thing this phone has to be told.
+      if (result.error === 'VOTING_CLOSED') {
+        setPhase('unavailable')
         return
       }
       // The same treatment a wrong code gets, for the same reason: a failure the

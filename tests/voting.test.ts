@@ -163,6 +163,33 @@ describe('one code, one vote', () => {
     expect(await countVotes(eventId)).toBe(1)
   })
 
+  /**
+   * The limiter is keyed on the code, not on the caller's address: a venue puts
+   * the whole room behind one NAT address. It is a ceiling on database work and
+   * nothing more, and it deliberately sits above the burst the test above needs,
+   * so that test keeps reaching the constraint that actually guarantees one vote.
+   */
+  it('caps one code hammering the vote endpoint', async () => {
+    const { eventId, demoIds, codes } = await seed()
+    const cookie = await redeem(eventId, codes[0]!)
+
+    const responses = await Promise.all(
+      Array.from({ length: 40 }, (_, index) =>
+        api('/api/vote', {
+          method: 'POST',
+          cookie,
+          body: JSON.stringify({ demoId: demoIds[index % demoIds.length] }),
+        }),
+      ),
+    )
+
+    const statuses = responses.map((response) => response.status)
+    expect(statuses.filter((status) => status === 429).length).toBeGreaterThan(0)
+    // The refusals are still refusals, whichever layer produced them.
+    expect(statuses.filter((status) => status === 200)).toHaveLength(1)
+    expect(await countVotes(eventId)).toBe(1)
+  })
+
   it('rejects a duplicate insert at the database level', async () => {
     // Proves the guarantee is the UNIQUE index itself, independent of any
     // application logic that might later be refactored around it.

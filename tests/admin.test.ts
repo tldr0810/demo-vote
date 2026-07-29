@@ -374,3 +374,21 @@ describe('the tally', () => {
     expect(results.tally.slice(1).every((row) => row.votes === 0)).toBe(true)
   })
 })
+
+describe('health', () => {
+  it('reports the database, not just the configuration', async () => {
+    // A health check that reads only its own secrets answers "ok" from a
+    // deployment whose D1 binding points at nothing. That is the one failure
+    // nobody discovers until the room is holding printed slips, so the smoke
+    // test asserts this field too.
+    const body = await (await api('/api/health')).json<{
+      ok: boolean
+      database: boolean
+      configured: { adminPassword: boolean; hmacKey: boolean }
+    }>()
+
+    expect(body.database).toBe(true)
+    expect(body.configured).toEqual({ adminPassword: true, hmacKey: true })
+    expect(body.ok).toBe(true)
+  })
+})

@@ -159,6 +159,11 @@ export async function postVote(request: Request, env: Env): Promise<Response> {
   const session = await currentVoter(request, secret)
   if (!session) return fail('NO_SESSION', 401)
 
+  // Keyed on the code rather than the address it arrived from: the whole room is
+  // behind one venue IP, and one code is entitled to one vote. See wrangler.toml.
+  const allowed = await env.VOTE_RATE_LIMITER.limit({ key: session.c })
+  if (!allowed.success) return fail('RATE_LIMITED', 429)
+
   const body = await readJson<{ demoId?: string }>(request)
   if (!body?.demoId) return fail('BAD_REQUEST', 400)
 

@@ -24,6 +24,9 @@ async function main() {
   // still serve a login page, so this has to be asserted rather than eyeballed.
   check('ADMIN_PASSWORD is configured', healthBody?.configured?.adminPassword === true)
   check('VOTE_HMAC_KEY is configured', healthBody?.configured?.hmacKey === true)
+  // The D1 binding is rewritten at deploy time by set-d1-database-id.mjs, so a
+  // deployment can be perfectly configured and still be pointed at no database.
+  check('D1 answers a query', healthBody?.database === true)
 
   const shell = await fetch(base)
   const html = await shell.text()

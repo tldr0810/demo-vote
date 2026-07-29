@@ -53,6 +53,25 @@ namespace_id = "2002"
 limit = 5
 period = 60
 
+# Keyed on the voting code, NOT on the IP. A venue puts every phone in the room
+# behind one NAT address, so an IP limit on this endpoint would be a limit on the
+# room.
+#
+# This is a ceiling on database work, not the anti-double-vote mechanism. That is
+# the UNIQUE constraint on votes.code, and it has to stay reachable: the test in
+# tests/voting.test.ts fires twenty simultaneous ballots from one code and
+# requires nineteen of them to be refused BY THE CONSTRAINT, with a 409. A limit
+# below twenty would answer most of them 429 instead, and the one guarantee this
+# project cannot get wrong would go untested while every test still passed. Hence
+# a limit above that burst: it does nothing to any real voter, and it still caps
+# a script pointed at this endpoint with a valid cookie.
+[[ratelimits]]
+name = "VOTE_RATE_LIMITER"
+namespace_id = "2003"
+[ratelimits.simple]
+limit = 30
+period = 60
+
 [vars]
 ENVIRONMENT = "production"
 

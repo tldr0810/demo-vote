@@ -44,8 +44,22 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
   const method = request.method
 
   if (pathname === '/api/health' && method === 'GET') {
+    // Actually asks the database. A health check that only reads its own
+    // configuration answers "ok" from a deployment whose D1 binding points at
+    // nothing, which is the one failure that cannot be discovered later: by the
+    // time anybody notices, the room is holding printed slips for an event that
+    // cannot be created. The query is the cheapest one that proves a round trip.
+    let database = false
+    try {
+      await env.DB.prepare('select 1').first()
+      database = true
+    } catch (error) {
+      console.error('health: database unreachable', error)
+    }
+
     return json({
-      ok: true,
+      ok: database && Boolean(env.ADMIN_PASSWORD) && Boolean(env.VOTE_HMAC_KEY),
+      database,
       // Surfaced so a fresh deployment can tell "misconfigured" from "broken"
       // without exposing the values themselves.
       configured: { adminPassword: Boolean(env.ADMIN_PASSWORD), hmacKey: Boolean(env.VOTE_HMAC_KEY) },
