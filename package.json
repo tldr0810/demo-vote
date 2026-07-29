@@ -18,7 +18,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply demo-vote-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply demo-vote-db --remote",
-    "check": "npm run typecheck && npm run test && npm run build",
+    "contrast": "node scripts/check-contrast.mjs",
+    "check": "npm run typecheck && npm run contrast && npm run test && npm run build",
     "check:worker": "wrangler deploy --dry-run --outdir=.wrangler/dry-run",
     "smoke": "node scripts/smoke.mjs",
     "qr": "node scripts/qr.mjs"

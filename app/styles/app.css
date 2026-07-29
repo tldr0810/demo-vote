@@ -29,8 +29,13 @@
   --line-strong: #3a3f47;
 
   --text: #e9e7e2;
-  --text-muted: #8d929a;
-  --text-faint: #5f646c;
+  --text-muted: #979ca4;
+  /* Carries 13px hints and the 14px rank column, so it is held to the 4.5:1
+     small-text ratio rather than to the 3:1 one, against --surface as well as
+     against --bg. The muted step above it moves with it: the two are a ladder,
+     and closing the gap between them would leave the app with one grey wearing
+     two names. */
+  --text-faint: #83888f;
 
   /* The select chevron. A token rather than an inline background because an SVG
      data URI cannot read currentColor, so the stroke has to be restated per
@@ -43,11 +48,20 @@
 
   --accent: #46d98a;
   --accent-ink: #06120b;
-  --accent-dim: #1f6b45;
+  /* The bar every demo gets. Read against --line, which is the track it sits
+     in: a fill that cannot be told from its own track is not a quieter bar, it
+     is no bar at all. 3:1 is the floor for a graphic that carries information.
+     Kept clearly below --accent so the leader still reads as the leader. */
+  --accent-dim: #2b9260;
 
   /* Time pressure only. Never decorative. */
   --warn: #f0b429;
   --danger: #f0685b;
+  /* Both reds are bright enough to sit on the dark background, which is what
+     the urgent countdown needs, and too bright to carry white button text.
+     Hence an ink token: .btn--danger changes, --danger itself does not, and the
+     clock keeps the colour it was tuned for. */
+  --danger-ink: #16181b;
 
   --radius-surface: 14px;
   --radius-input: 10px;
@@ -73,18 +87,25 @@
 
     --text: #16181b;
     --text-muted: #5c6067;
-    --text-faint: #8b8f96;
+    --text-faint: #696e75;
 
     --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7' viewBox='0 0 11 7'%3E%3Cpath d='M1 1.25 5.5 5.75 10 1.25' fill='none' stroke='%235c6067' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
     --picker-shadow: 0 10px 28px rgb(22 24 27 / 0.14);
 
-    --accent: #12925a;
+    --accent: #0e7a4b;
     --accent-ink: #ffffff;
-    --accent-dim: #b7e6cd;
+    /* Darker than --accent here, where the dark theme has it lighter, and the
+       inversion is forced rather than chosen. The track is #e0ded8: anything
+       reaching 3:1 against it has to be darker than it, since no colour is
+       bright enough to clear 3:1 on the light side. So in this theme the quiet
+       bar is the deep one and the leader is the vivid one. A mint fill was 1.03:1
+       against its own track, which on a projector is a row of empty tracks. */
+    --accent-dim: #095434;
 
-    --warn: #a86a05;
+    --warn: #965e04;
     --danger: #c0392b;
+    --danger-ink: #ffffff;
   }
 }
 
@@ -372,7 +393,7 @@ p {
 
 .btn--danger {
   background: var(--danger);
-  color: #ffffff;
+  color: var(--danger-ink);
 }
 
 .btn--block {
@@ -590,8 +611,12 @@ p {
   background: var(--accent);
 }
 
+/* Weight as well as colour. Leading was signalled by hue alone, and hue alone
+   is the one signal a projector's colour profile, a sunlit room or a colour
+   vision deficiency can all flatten at once. */
 .result--leader .result__rank {
   color: var(--accent);
+  font-weight: 700;
 }
 
 .result__count {

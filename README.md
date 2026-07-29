@@ -73,7 +73,8 @@ npm run dev                      # http://localhost:5273
 | `npm run dev` | Dev server: front-end HMR plus the Worker running in workerd |
 | `npm test` | Test suite, including the concurrency test against a real local D1 |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm run check` | Typecheck, tests and build |
+| `npm run contrast` | Reads the tokens out of `app.css` and fails on a WCAG contrast regression in either theme. `-v` prints every pair |
+| `npm run check` | Typecheck, contrast, tests and build |
 | `npm run check:worker` | Bundle the Worker with Wrangler without publishing |
 | `npm run cf-typegen` | Regenerate `worker-configuration.d.ts` after editing `wrangler.toml` |
 | `npm run db:generate` | Generate a migration after editing `db/schema.ts` |
@@ -209,6 +210,14 @@ the window runs down.
 There is one accent colour, emerald, for everything the voter does. Amber and
 red are reserved for time pressure alone, so a colour change on screen always
 means the clock and never decoration.
+
+Both themes are held to WCAG contrast by `npm run contrast`, which reads the
+tokens out of the stylesheet rather than a copy of them. The bars are the reason
+it exists: a fill that cannot be told from its own track is a missing bar, and
+this is the screen that gets projected. In the light theme the quiet bar is
+therefore the *deeper* green and the leading one the vivid green, the reverse of
+the dark theme, because on a light track every colour that clears 3:1 is darker
+than the track.
 
 Motion is GSAP, all of it behind `motionOk()`, and none of it runs under
 `prefers-reduced-motion: reduce`. No element starts hidden in CSS, so the page
