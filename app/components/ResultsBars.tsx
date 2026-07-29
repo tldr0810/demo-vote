@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import type { TallyRow } from '../api'
 import { Flip, gsap, motionOk, useGSAP } from '../motion'
+import { rankTally } from '../ranking'
 
 /**
  * The tally, as a ranked list of bars.
@@ -58,13 +59,15 @@ export function ResultsBars({ tally, revealed }: { tally: TallyRow[]; revealed: 
 
   return (
     <ul className="results" ref={listRef}>
-      {tally.map((row, index) => {
+      {rankTally(tally).map((row) => {
         // Bars are scaled against the leader, not against the total. With six
         // demos splitting the room the longest bar would otherwise sit at a
         // fifth of the track and the chart would read as empty.
         const share = leaderVotes > 0 ? row.votes / leaderVotes : 0
         const percent = total > 0 ? Math.round((row.votes / total) * 100) : 0
-        const isLeader = revealed && index === 0 && row.votes > 0
+        // Every demo sharing the top count, not the first row of the array. On a
+        // tie the array order is decided by slot number, which is not a result.
+        const isLeader = revealed && row.leading
 
         return (
           <li
@@ -72,7 +75,7 @@ export function ResultsBars({ tally, revealed }: { tally: TallyRow[]; revealed: 
             className={`result${isLeader ? ' result--leader' : ''}`}
             data-flip-id={row.demoId}
           >
-            <span className="result__rank num">{String(index + 1).padStart(2, '0')}</span>
+            <span className="result__rank num">{String(row.rank).padStart(2, '0')}</span>
             <div className="result__body">
               <div className="result__name">{row.name}</div>
               {row.team ? <div className="demo__team">{row.team}</div> : null}

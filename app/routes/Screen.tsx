@@ -3,6 +3,7 @@ import { api, type TallyRow } from '../api'
 import { ResultsBars } from '../components/ResultsBars'
 import { messageFor } from '../messages'
 import { gsap, motionOk, useGSAP } from '../motion'
+import { joinNames, leaders } from '../ranking'
 
 type Payload = { event: { name: string }; tally: TallyRow[] }
 
@@ -52,11 +53,15 @@ export function Screen({ eventId }: { eventId: string }) {
     }
   }, [eventId, settled])
 
-  const winner = payload?.tally[0]
+  // Everyone on the top count. The tally arrives in a total order, so reading
+  // tally[0] as "the winner" would announce whichever tied demo happened to have
+  // the lower slot number, in the largest type on the largest screen in the room.
+  const winners = payload ? leaders(payload.tally) : []
+  const settledWithRows = Boolean(payload?.tally.length)
 
   useGSAP(
     () => {
-      if (!winner || !motionOk()) return
+      if (!settledWithRows || !motionOk()) return
       gsap
         .timeline()
         .from('[data-anim="screen-head"]', {
@@ -86,7 +91,7 @@ export function Screen({ eventId }: { eventId: string }) {
           '-=0.15',
         )
     },
-    { dependencies: [Boolean(winner)], scope: rootRef },
+    { dependencies: [settledWithRows], scope: rootRef },
   )
 
   if (error === 'PENDING') {
@@ -127,8 +132,17 @@ export function Screen({ eventId }: { eventId: string }) {
         </span>
       </div>
 
+      {/* Says the word out loud on a tie. Two names in 4rem type with no label
+          reads as a layout accident; "joint first" tells the room what it is
+          looking at, and the standings underneath show the equal counts. */}
+      {winners.length > 1 ? (
+        <span className="label" data-anim="screen-head">
+          Joint first place
+        </span>
+      ) : null}
+
       <h1 data-anim="winner">
-        {winner && winner.votes > 0 ? winner.name : 'No votes were cast'}
+        {winners.length > 0 ? joinNames(winners.map((row) => row.name)) : 'No votes were cast'}
       </h1>
 
       <ResultsBars tally={payload.tally} revealed />

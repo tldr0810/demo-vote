@@ -198,6 +198,13 @@ one that is already running.
 
 ## Design notes
 
+A tie is a result, not an edge case. The tally is sorted count desc then slot
+asc, which always puts somebody first, so ranks are computed separately in
+`app/ranking.ts`: equal counts share a place, the place after a two-way tie for
+first is third, and the projector announces joint winners by name rather than
+crowning whichever tied demo had the lower slot number. Nobody leads on zero
+votes. `tests/ranking.test.ts` covers it.
+
 The visual language is a scoreboard, not a landing page. There is not a single
 icon anywhere: a demo needs a number, a name and a count, and type handles all
 three better than glyphs would.
