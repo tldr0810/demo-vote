@@ -1,13 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, type Ballot, type PublicEvent } from '../api'
+import { api, type Ballot, type PublicEvent, type TallyRow } from '../api'
 import { CountdownRing } from '../components/CountdownRing'
 import { DemoCard } from '../components/DemoCard'
+import { ResultsBars } from '../components/ResultsBars'
 import { messageFor } from '../messages'
 import { gsap, motionOk, useGSAP } from '../motion'
 
-type Phase = 'loading' | 'entry' | 'ballot' | 'done' | 'unavailable'
+type Phase = 'loading' | 'entry' | 'ballot' | 'done' | 'unavailable' | 'results'
+
+type Results = { event: { name: string }; tally: TallyRow[] }
 
 const CODE_LENGTH = 8
+
+/**
+ * How often a phone asks whether the organiser has revealed yet.
+ *
+ * The projector polls every three seconds because there is one of it and a room
+ * is watching it. A phone has two hundred copies of itself on the same venue
+ * wifi and nobody is waiting for a number to twitch, so this is deliberately
+ * slower. It also stops for good on the first success, which means each phone
+ * makes a handful of requests over the whole event and then goes quiet.
+ */
+const REVEAL_POLL_MS = 8000
 
 export function Vote({ eventId }: { eventId: string | null }) {
   const [phase, setPhase] = useState<Phase>('loading')
@@ -18,6 +32,7 @@ export function Vote({ eventId }: { eventId: string | null }) {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [votedFor, setVotedFor] = useState<string | null>(null)
+  const [results, setResults] = useState<Results | null>(null)
 
   const rootRef = useRef<HTMLDivElement>(null)
   const entryCardRef = useRef<HTMLDivElement>(null)
@@ -51,6 +66,21 @@ export function Vote({ eventId }: { eventId: string | null }) {
       }
       setEvent(eventResult.data)
 
+      // Checked before anything to do with sessions. Once the organiser has
+      // revealed, the standings are what everybody should see, whether or not
+      // they ever held a code: the results endpoint is public from that moment.
+      // It also rescues a dead end, since scanning after voting closed used to
+      // land on a screen that said so and nothing else.
+      if (eventResult.data.status === 'revealed') {
+        const revealed = await api.get<Results>(`/api/results/${eventResult.data.id}`)
+        if (cancelled) return
+        if (revealed.ok) {
+          setResults(revealed.data)
+          setPhase('results')
+          return
+        }
+      }
+
       const ballotResult = await api.get<Ballot>(
         `/api/ballot?eventId=${encodeURIComponent(eventResult.data.id)}`,
       )
@@ -69,6 +99,55 @@ export function Vote({ eventId }: { eventId: string | null }) {
       cancelled = true
     }
   }, [eventId])
+
+  const currentEventId = event?.id ?? null
+
+  // Only while there is something to wait for. A draft is excluded because it
+  // cannot be revealed without being opened first, so polling it is traffic that
+  // can never come back with anything.
+  const waitingForReveal =
+    results === null &&
+    event !== null &&
+    event.status !== 'draft' &&
+    (phase === 'done' || phase === 'unavailable')
+
+  /**
+   * Waits for the reveal, then shows it, so a phone that voted turns into the
+   * standings by itself rather than telling its owner to go and look elsewhere.
+   *
+   * Stops on the first success and never starts again: ResultsBars animates its
+   * rows in, and a re-render landing mid-animation leaves them stranded part-way.
+   * Screen.tsx guards the projector against exactly this.
+   */
+  useEffect(() => {
+    if (!waitingForReveal || !currentEventId) return
+    let cancelled = false
+
+    async function poll() {
+      // A locked phone polling costs the venue wifi and tells nobody anything.
+      if (document.visibilityState === 'hidden') return
+
+      const revealed = await api.get<Results>(`/api/results/${currentEventId}`)
+      // Anything other than success means not published yet, which is the normal
+      // case for most of the wait and is not worth showing anybody.
+      if (cancelled || !revealed.ok) return
+
+      setResults(revealed.data)
+      setPhase('results')
+    }
+
+    void poll()
+    const timer = window.setInterval(poll, REVEAL_POLL_MS)
+    // A phone picked up after the reveal should not have to sit through the rest
+    // of an interval before it catches up.
+    document.addEventListener('visibilitychange', poll)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', poll)
+    }
+  }, [waitingForReveal, currentEventId])
 
   async function submitCode(submittedEvent: React.FormEvent) {
     submittedEvent.preventDefault()
@@ -171,6 +250,18 @@ export function Vote({ eventId }: { eventId: string | null }) {
             '-=0.2',
           )
       }
+      // Only the heading. The bars bring their own motion, and a second tween
+      // over the same rows would fight it.
+      if (phase === 'results') {
+        gsap.from('[data-anim="results-head"]', {
+          y: 12,
+          opacity: 0,
+          duration: 0.45,
+          stagger: 0.06,
+          ease: 'power2.out',
+          clearProps: 'all',
+        })
+      }
     },
     { dependencies: [phase], scope: rootRef },
   )
@@ -199,7 +290,7 @@ export function Vote({ eventId }: { eventId: string | null }) {
             {error ??
               (event?.status === 'draft'
                 ? 'Voting has not opened yet. Wait for the organisers to announce it, then refresh this page.'
-                : 'Voting has closed. Thanks for taking part.')}
+                : 'Voting has closed. The results appear here as soon as the organisers publish them.')}
           </p>
         </div>
       ) : null}
@@ -341,9 +432,24 @@ export function Vote({ eventId }: { eventId: string | null }) {
             <h2>Your vote is in</h2>
             {votedFor ? <p style={{ margin: '0 auto' }}>You voted for {votedFor}</p> : null}
             <p style={{ margin: '0 auto' }}>
-              The results go up on the big screen once voting closes. You can close this page.
+              The standings appear here the moment the organisers publish them, and on the big
+              screen at the same time. Leave this page open.
             </p>
           </div>
+        </div>
+      ) : null}
+
+      {phase === 'results' && results ? (
+        <div className="stack">
+          <div className="eyebrow" data-anim="results-head">
+            <span className="label">Demo Vote</span>
+            <span className="label">{results.event.name}</span>
+          </div>
+          <h1 data-anim="results-head">Results</h1>
+          {/* Carried over from the receipt this screen replaces, so the one
+              thing the voter knew a moment ago is not taken away from them. */}
+          {votedFor ? <p data-anim="results-head">You voted for {votedFor}</p> : null}
+          <ResultsBars tally={results.tally} revealed />
         </div>
       ) : null}
     </div>
