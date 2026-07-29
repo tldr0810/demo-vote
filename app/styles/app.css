@@ -37,6 +37,10 @@
      theme. It is --text-muted in both. */
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7' viewBox='0 0 11 7'%3E%3Cpath d='M1 1.25 5.5 5.75 10 1.25' fill='none' stroke='%238d929a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
+  /* Lifts the open picker off the panel behind it. Heavier here than in light
+     mode, where a dark surface cannot do the separating on its own. */
+  --picker-shadow: 0 12px 32px rgb(0 0 0 / 0.45);
+
   --accent: #46d98a;
   --accent-ink: #06120b;
   --accent-dim: #1f6b45;
@@ -72,6 +76,8 @@
     --text-faint: #8b8f96;
 
     --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7' viewBox='0 0 11 7'%3E%3Cpath d='M1 1.25 5.5 5.75 10 1.25' fill='none' stroke='%235c6067' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+
+    --picker-shadow: 0 10px 28px rgb(22 24 27 / 0.14);
 
     --accent: #12925a;
     --accent-ink: #ffffff;
@@ -227,21 +233,90 @@ p {
   letter-spacing: 0.22em;
 }
 
-/* The event picker is the only <select> in the app and it borrows .input, which
-   was written for text fields. Left alone, the platform draws its own arrow hard
-   against the right edge of a full-width control, so it reads as a second
-   detached box instead of part of the field. This puts a chevron at the same
-   inset from the right as the text has from the left, so the two line up.
+/* ------------------------------------------------------------------ picker */
+
+/* The event picker is a listbox, not a native <select>: an open <select> is drawn
+   by the operating system and cannot be reached from CSS, so it would arrive
+   looking like macOS on one laptop and Windows on the next. See
+   app/components/EventPicker.tsx. */
+
+.picker {
+  position: relative;
+}
+
+/* .input supplies the box. This adds the affordance, at the same inset from the
+   right as the text has from the left so the two line up, and the room for it.
    Vertical centring is left to background-position, which keeps it correct if
    .input's padding ever changes. */
-select.input {
-  appearance: none;
+.picker__button {
+  text-align: left;
   cursor: pointer;
-  /* Room so a long event name never runs underneath the chevron. */
   padding-right: calc(var(--step) * 4.5);
   background-image: var(--chevron);
   background-repeat: no-repeat;
   background-position: right calc(var(--step) * 2) center;
+}
+
+.picker__button[aria-expanded='true'] {
+  border-color: var(--accent);
+}
+
+.picker__list {
+  position: absolute;
+  /* Above the sticky confirm bar, which sits at 10. */
+  z-index: 20;
+  top: calc(100% + var(--step) * 0.75);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: calc(var(--step) * 0.75);
+  list-style: none;
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-input);
+  box-shadow: var(--picker-shadow);
+  max-height: 15rem;
+  overflow-y: auto;
+  animation: picker-in 0.14s ease-out;
+}
+
+@keyframes picker-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .picker__list {
+    animation: none;
+  }
+}
+
+.picker__option {
+  /* A fixed column for the tick, so labels stay put instead of shifting sideways
+     as the selection moves down the list. */
+  display: grid;
+  grid-template-columns: calc(var(--step) * 1.75) 1fr;
+  gap: var(--step);
+  padding: calc(var(--step) * 1.25) calc(var(--step) * 1.25);
+  border-radius: calc(var(--radius-input) - 3px);
+  cursor: pointer;
+}
+
+/* One highlight, driven by the keyboard and by the pointer alike, so arrowing
+   down and moving the mouse cannot disagree about which row is current. */
+.picker__option[data-active='true'] {
+  background: var(--line);
+}
+
+.picker__tick {
+  font-family: var(--mono);
+  color: var(--accent);
+}
+
+.picker__option[aria-selected='true'] .picker__tick::before {
+  content: '✓';
 }
 
 .hint {

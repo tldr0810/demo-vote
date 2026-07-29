@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type AdminEvent, type AdminResults, type EventStatus } from '../api'
 import { CountdownRing } from '../components/CountdownRing'
+import { EventPicker } from '../components/EventPicker'
 import { ResultsBars } from '../components/ResultsBars'
 import { VoteQr } from '../components/VoteQr'
 import { STATUS_LABEL, messageFor } from '../messages'
@@ -170,24 +171,18 @@ export function Admin() {
             reused, and by the twentieth event a button row would wrap into a
             wall. Newest first, since that is almost always the one wanted. */}
         {events.length > 1 ? (
-          <div className="field">
-            <label htmlFor="event-picker">Event</label>
-            <select
-              id="event-picker"
-              className="input"
-              value={selectedId ?? ''}
-              onChange={(changed) => {
-                setSelectedId(changed.target.value)
-                setResults(null)
-              }}
-            >
-              {events.map((event) => (
-                <option key={event.id} value={event.id}>
-                  {event.name} · {STATUS_LABEL[event.status]}
-                </option>
-              ))}
-            </select>
-          </div>
+          <EventPicker
+            label="Event"
+            value={selectedId ?? ''}
+            options={events.map((event) => ({
+              id: event.id,
+              label: `${event.name} · ${STATUS_LABEL[event.status]}`,
+            }))}
+            onChange={(id) => {
+              setSelectedId(id)
+              setResults(null)
+            }}
+          />
         ) : null}
 
         {selected ? (
