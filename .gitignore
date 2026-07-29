@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+*.local
+.DS_Store
+
+# Generated artefacts: code batches and the QR code from `npm run qr`.
+codes-*.csv
+vote-qr.svg
+
+# worker-configuration.d.ts is deliberately NOT ignored. tsconfig includes it
+# and `npm run check` typechecks against it, so a fresh clone needs it present.
+# Regenerate with `npm run cf-typegen` after editing wrangler.toml.

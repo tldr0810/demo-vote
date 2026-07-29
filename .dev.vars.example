@@ -1,0 +1,9 @@
+# Copy to .dev.vars (uncommitted) for local development.
+
+# Unlocks /admin.
+ADMIN_PASSWORD=replace-with-a-long-random-password
+
+# Signs voter and admin session cookies. Must be at least 32 random characters
+# and different from ADMIN_PASSWORD. Rotating it invalidates every live session,
+# so do not rotate during an event.
+VOTE_HMAC_KEY=replace-with-at-least-32-random-characters

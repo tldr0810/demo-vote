@@ -1,0 +1,61 @@
+# Demo Vote — live audience voting for demo/pitch sessions.
+#
+# This app makes ZERO LLM calls. There is no agent binding, no API token, and
+# no inference cost — for us or for anyone who forks it.
+name = "demo-vote"
+main = "worker/index.ts"
+# No nodejs_compat: the Worker uses only Web Crypto and the D1 binding.
+compatibility_date = "2026-07-26"
+
+# Votes are cast once and cannot be recast. When something goes wrong during a
+# live event there is no second chance to reproduce it, so keep full logs.
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# The React SPA is built by @cloudflare/vite-plugin into dist/client.
+# `directory` is redundant under the plugin, which injects its own, but
+# @cloudflare/vitest-pool-workers parses this file directly and refuses to start
+# without it. `not_found_handling` is what makes a refresh on /admin or
+# /v/<id> serve index.html instead of a 404.
+[assets]
+binding = "ASSETS"
+directory = "dist/client"
+not_found_handling = "single-page-application"
+
+# D1 (not KV) is the source of truth for votes. The one-vote-per-code guarantee
+# is a UNIQUE constraint on votes.code, which requires a strongly consistent
+# store: KV's eventual consistency would let two concurrent requests both read
+# "unused" and double-count. database_id is rewritten at deploy time by
+# scripts/set-d1-database-id.mjs.
+[[d1_databases]]
+binding = "DB"
+database_name = "demo-vote-db"
+database_id = "00000000-0000-4000-8000-000000000000"
+migrations_dir = "drizzle"
+
+# Per-IP limit on code redemption. Codes are 8 chars from a 30-char alphabet
+# (~6.6e11 combinations), so this exists to make online guessing hopeless
+# rather than merely impractical.
+[[ratelimits]]
+name = "SESSION_RATE_LIMITER"
+namespace_id = "2001"
+[ratelimits.simple]
+limit = 10
+period = 60
+
+# Per-IP limit on admin login attempts, layered under the per-account lockout
+# counter in worker/auth.ts.
+[[ratelimits]]
+name = "ADMIN_RATE_LIMITER"
+namespace_id = "2002"
+[ratelimits.simple]
+limit = 5
+period = 60
+
+[vars]
+ENVIRONMENT = "production"
+
+# Secrets (never committed). Local: .dev.vars — Production: GitHub environment.
+#   ADMIN_PASSWORD  — unlocks /admin
+#   VOTE_HMAC_KEY   — signs voter and admin session cookies

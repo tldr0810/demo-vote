@@ -1,0 +1,159 @@
+name: Deploy Demo Vote
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demo-vote-production
+  cancel-in-progress: false
+
+env:
+  D1_DATABASE_NAME: demo-vote-db
+  PRODUCTION_URL: ${{ vars.PRODUCTION_URL || 'https://demo-vote.workers.dev' }}
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Typecheck, the full test suite (including the concurrent-ballot test),
+      # and the production build.
+      - name: Validate source and Worker bundle
+        run: npm run check
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
+
+  deploy:
+    name: Deploy production
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Fail before touching Cloudflare rather than deploying an app that
+      # cannot authenticate anyone.
+      - name: Verify deployment secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          VOTE_HMAC_KEY: ${{ secrets.VOTE_HMAC_KEY }}
+        run: |
+          missing=0
+          for name in \
+            CLOUDFLARE_API_TOKEN \
+            CLOUDFLARE_ACCOUNT_ID \
+            ADMIN_PASSWORD \
+            VOTE_HMAC_KEY
+          do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing production secret ${name}"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          if [ "${#VOTE_HMAC_KEY}" -lt 32 ]; then
+            echo "::error::VOTE_HMAC_KEY must be at least 32 characters"
+            exit 1
+          fi
+          if [ "$ADMIN_PASSWORD" = "$VOTE_HMAC_KEY" ]; then
+            echo "::error::ADMIN_PASSWORD and VOTE_HMAC_KEY must differ"
+            exit 1
+          fi
+
+      - name: Ensure D1 database exists
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          NO_COLOR: "1"
+        run: |
+          database_id="$(
+            npx wrangler d1 list --json \
+              | jq -r --arg name "$D1_DATABASE_NAME" \
+                'map(select(.name == $name)) | first | .uuid // empty'
+          )"
+          if [ -z "$database_id" ]; then
+            npx wrangler d1 create "$D1_DATABASE_NAME" --config wrangler.toml
+            database_id="$(
+              npx wrangler d1 list --json \
+                | jq -r --arg name "$D1_DATABASE_NAME" \
+                  'map(select(.name == $name)) | first | .uuid // empty'
+            )"
+          fi
+          if [ -z "$database_id" ]; then
+            echo "::error::Could not resolve D1 database ${D1_DATABASE_NAME}"
+            exit 1
+          fi
+          node scripts/set-d1-database-id.mjs wrangler.toml "$database_id"
+
+      - name: Apply D1 migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          NO_COLOR: "1"
+        run: npx wrangler d1 migrations apply "$D1_DATABASE_NAME" --remote --config wrangler.toml
+
+      # Runs after the database id is patched in, so the generated
+      # dist/demo_vote/wrangler.json carries the real binding.
+      - name: Build
+        run: npm run build
+
+      # @cloudflare/vite-plugin copies .dev.vars into the Worker build output so
+      # that `vite preview` has the same bindings as `vite dev`. `wrangler
+      # deploy` never reads it, and CI has no such file to begin with, but a
+      # build directory is the wrong place for plaintext secrets to sit. Removed
+      # unconditionally so this stays true if someone deploys from a local build.
+      - name: Strip local dev secrets from the build output
+        run: rm -f dist/demo_vote/.dev.vars
+
+      - name: Deploy Worker and secrets
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config dist/demo_vote/wrangler.json
+          secrets: |
+            ADMIN_PASSWORD
+            VOTE_HMAC_KEY
+        env:
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          VOTE_HMAC_KEY: ${{ secrets.VOTE_HMAC_KEY }}
+
+      - name: Smoke test production
+        run: npm run smoke -- "$PRODUCTION_URL"
