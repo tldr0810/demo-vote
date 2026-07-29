@@ -32,6 +32,11 @@
   --text-muted: #8d929a;
   --text-faint: #5f646c;
 
+  /* The select chevron. A token rather than an inline background because an SVG
+     data URI cannot read currentColor, so the stroke has to be restated per
+     theme. It is --text-muted in both. */
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7' viewBox='0 0 11 7'%3E%3Cpath d='M1 1.25 5.5 5.75 10 1.25' fill='none' stroke='%238d929a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+
   --accent: #46d98a;
   --accent-ink: #06120b;
   --accent-dim: #1f6b45;
@@ -65,6 +70,8 @@
     --text: #16181b;
     --text-muted: #5c6067;
     --text-faint: #8b8f96;
+
+    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7' viewBox='0 0 11 7'%3E%3Cpath d='M1 1.25 5.5 5.75 10 1.25' fill='none' stroke='%235c6067' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
     --accent: #12925a;
     --accent-ink: #ffffff;
@@ -218,6 +225,23 @@ p {
 .input--code::placeholder {
   color: var(--text-faint);
   letter-spacing: 0.22em;
+}
+
+/* The event picker is the only <select> in the app and it borrows .input, which
+   was written for text fields. Left alone, the platform draws its own arrow hard
+   against the right edge of a full-width control, so it reads as a second
+   detached box instead of part of the field. This puts a chevron at the same
+   inset from the right as the text has from the left, so the two line up.
+   Vertical centring is left to background-position, which keeps it correct if
+   .input's padding ever changes. */
+select.input {
+  appearance: none;
+  cursor: pointer;
+  /* Room so a long event name never runs underneath the chevron. */
+  padding-right: calc(var(--step) * 4.5);
+  background-image: var(--chevron);
+  background-repeat: no-repeat;
+  background-position: right calc(var(--step) * 2) center;
 }
 
 .hint {
