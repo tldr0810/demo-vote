@@ -27,15 +27,17 @@ export async function getEvent(db: Db, eventId: string) {
 /**
  * The event the landing page sends people to when the URL carries no id.
  *
- * This is what makes one printed QR code last forever: a sign made for the
- * first event still resolves to whatever is happening at the twentieth.
+ * This is the fallback, not the path the room takes. Voters scan a per-event QR
+ * encoding /v/<eventId>, and both voting endpoints resolve the event from the
+ * session rather than from here, so this only decides what somebody sees after
+ * typing the bare address.
  *
- * The ordering is what makes it work, and it is easy to get wrong. A finished
- * event must rank BELOW one that is merely being set up, otherwise the sign
- * keeps pointing at last quarter's results while everyone in the room is
- * waiting to vote on this quarter's. Live first, then the one being prepared,
- * then the most recent leftover so the page can still say something sensible
- * when nothing is scheduled.
+ * The ordering still has to be right and is still easy to get wrong. A finished
+ * event must rank BELOW one that is merely being set up, or the bare address
+ * shows last quarter's results while this quarter's is being prepared. Live
+ * first, then the one being prepared, then the most recent leftover so the page
+ * can still say something sensible when nothing is scheduled.
+ * tests/voting.test.ts guards it.
  */
 export async function getCurrentEvent(db: Db) {
   const rows = await db

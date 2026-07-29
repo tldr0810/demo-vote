@@ -38,9 +38,10 @@ asserts the database ends up with exactly one row.
 2. **Generate codes.** Enter how many you need and generate, or download the CSV
    to print from. Codes are 8 characters from an alphabet that deliberately
    omits `I L O U 0 1`, so nothing on a printed slip can be misread.
-3. **Make the QR code.** `/admin` shows the voting URL
-   (`https://your-domain/v/<eventId>`). Turn it into a QR code and put it on the
-   running order or a slide.
+3. **Make the QR code.** `/admin` renders the QR for the event you are setting up
+   and offers it as an SVG download. It encodes `/v/<eventId>`, so it belongs to
+   that event and to nothing else. Put it on the slips, the running order or a
+   slide.
 4. **Check-in.** One slip per person.
 5. **After the demos.** Press "Open voting". The countdown starts at that moment.
 6. **While voting.** The dashboard refreshes every two seconds and shows codes
@@ -93,15 +94,23 @@ open. Scan it, redeem a code from `/admin`, and walk the real path end to end.
 The tool is built to be reused. Create a new event for each session; the old
 ones stay in the dropdown with their results intact.
 
-**One printed QR code lasts forever.** The sign encodes `/` with no event id,
-and the Worker resolves that to whatever is happening right now: the live event
-if one is running, otherwise the one currently being set up, otherwise the most
-recent. Make the sign once, keep it on the wall.
+**Each event gets its own QR code.** The one `/admin` renders encodes
+`/v/<eventId>`, so a scan can only ever land on the event it was made for. There
+is no precedence to reason about and nothing to get wrong. It also means two
+events can run at once, which is the only way a multi-track day works: every
+voter session carries its own event id, so parallel votes do not interfere.
 
-The ordering that makes this work is load-bearing and easy to break. A finished
-event must rank *below* a draft, or the sign keeps pointing at last quarter's
-results while the room waits to vote on this quarter's.
-`tests/voting.test.ts` guards it.
+The neatest place for that QR is the printed slip itself. Codes are reprinted for
+every event anyway, so putting the QR on the same sheet costs nothing, removes
+the question of whether anybody remembered to swap a sign on the wall, and makes
+a mismatch impossible: the slip and the QR come off the same page, so they always
+belong to the same event.
+
+`/` with no event id still resolves to something sensible for anyone who types
+the bare address: the live event if one is running, otherwise the one being set
+up, otherwise the most recent. That ordering must rank a finished event *below* a
+draft, and `tests/voting.test.ts` guards it. It is a convenience for a mistyped
+address, not the path the room is meant to take.
 
 What is **not** reusable is the printed slips. Codes are bound to one event, so
 a slip from the last session is rejected at the next one. That is deliberate:
@@ -111,9 +120,9 @@ fresh print run each time.
 The cycle each time:
 
 1. `/admin` → **New event** → name it, enter the line-up, set the window
-2. Generate codes, download the CSV, print the slips
+2. Generate codes, download the CSV and the QR, print the slips
 3. Run the event (open, vote, close, reveal)
-4. Leave it. The next event starts at step 1 and the same QR code follows along
+4. Leave it. The next event starts at step 1 with a QR code of its own
 
 ## Fork it for your own event
 
