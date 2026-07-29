@@ -83,7 +83,7 @@ npm run dev                      # http://localhost:5273
 | `npm run check:worker` | Bundle the Worker with Wrangler without publishing |
 | `npm run cf-typegen` | Regenerate `worker-configuration.d.ts` after editing `wrangler.toml` |
 | `npm run db:generate` | Generate a migration after editing `db/schema.ts` |
-| `npm run smoke` | Post-deploy checks against localhost or a given URL |
+| `npm run smoke` | Post-deploy checks against localhost or a given URL. Waits for the target to serve the build in `dist/` before asserting anything, because `wrangler deploy` returns before the new version answers everywhere |
 
 ### Testing the full flow from a phone
 
