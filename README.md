@@ -116,7 +116,7 @@ belong to the same event.
 
 `/` with no event id still resolves to something sensible for anyone who types
 the bare address: the live event if one is running, otherwise the one being set
-up, otherwise the most recent. That ordering must rank a finished event *below* a
+up, otherwise the most recent that has not been archived. That ordering must rank a finished event *below* a
 draft, and `tests/voting.test.ts` guards it. It is a convenience for a mistyped
 address, not the path the room is meant to take.
 
@@ -124,6 +124,20 @@ What is **not** reusable is the printed slips. Codes are bound to one event, so
 a slip from the last session is rejected at the next one. That is deliberate:
 it stops someone who kept a slip from voting without turning up. It does mean a
 fresh print run each time.
+
+### Filing old events away
+
+A finished event can be archived from `/admin`, and unarchived again. Archived
+events drop out of the dropdown, which hides them behind a "Show archived"
+toggle, and out of what `/` resolves to. Archive everything and the bare address
+says there is no event, which is the truthful answer.
+
+Archiving is a nullable `events.archived_at`, **not** a fifth `status` value.
+`status` is a one-way machine that `getCurrentEvent` sorts on, so an `archived`
+status would gamble that ordering and would also throw away the record of
+whether the event ended `closed` or `revealed`. Only a `closed` or `revealed`
+event can be archived: hiding a draft or a live event from the landing page while
+a room is being told to scan for it is exactly the failure that rule prevents.
 
 The cycle each time:
 

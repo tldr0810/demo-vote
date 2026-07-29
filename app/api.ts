@@ -88,6 +88,9 @@ export type AdminEvent = {
   windowSeconds: number
   openedAt: string | null
   closesAt: string | null
+  // Set when the organiser files a finished event away. Not a status: see
+  // db/schema.ts.
+  archivedAt: string | null
   createdAt: string
   votingLive: boolean
   secondsRemaining: number

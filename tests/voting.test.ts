@@ -406,13 +406,14 @@ describe('one printed QR code, reused across events', () => {
     id: string,
     status: 'draft' | 'open' | 'closed' | 'revealed',
     createdAt: string,
+    archived = false,
   ) {
     const closesAt = new Date(Date.now() + 3600_000).toISOString()
     await env.DB.prepare(
-      `INSERT INTO events (id, name, status, window_seconds, opened_at, closes_at, created_at)
-       VALUES (?, ?, ?, 3600, ?, ?, ?)`,
+      `INSERT INTO events (id, name, status, window_seconds, opened_at, closes_at, created_at, archived_at)
+       VALUES (?, ?, ?, 3600, ?, ?, ?, ?)`,
     )
-      .bind(id, `Event ${id}`, status, createdAt, closesAt, createdAt)
+      .bind(id, `Event ${id}`, status, createdAt, closesAt, createdAt, archived ? createdAt : null)
       .run()
   }
 
@@ -453,6 +454,31 @@ describe('one printed QR code, reused across events', () => {
     // So the page can say "voting has closed" rather than "no such event".
     await seedEventOnly('evt_only', 'revealed', '2026-01-01T00:00:00.000Z')
     expect(await currentEventId()).toBe('evt_only')
+  })
+
+  it('skips an archived event even when it would otherwise win', async () => {
+    // Archiving is what stops the bare address resolving to last quarter's
+    // results forever, and it has to beat the status ordering to do it.
+    await seedEventOnly('evt_filed', 'revealed', '2026-03-01T00:00:00.000Z', true)
+    await seedEventOnly('evt_kept', 'revealed', '2026-01-01T00:00:00.000Z')
+    expect(await currentEventId()).toBe('evt_kept')
+  })
+
+  it('resolves to nothing at all when every event is archived', async () => {
+    // The landing page then says there is no event, which is true. Falling back
+    // to an archived one would undo the filing.
+    await seedEventOnly('evt_filed', 'revealed', '2026-01-01T00:00:00.000Z', true)
+    const response = await api('/api/current-event')
+    expect(response.status).toBe(404)
+    expect(await response.json()).toMatchObject({ error: 'EVENT_NOT_FOUND' })
+  })
+
+  it('brings an unarchived event back into the reckoning', async () => {
+    await seedEventOnly('evt_filed', 'draft', '2026-01-01T00:00:00.000Z', true)
+    await env.DB.prepare('UPDATE events SET archived_at = NULL WHERE id = ?')
+      .bind('evt_filed')
+      .run()
+    expect(await currentEventId()).toBe('evt_filed')
   })
 
   it('keeps a code from a previous event out of the current one', async () => {

@@ -23,6 +23,13 @@ export const events = sqliteTable('events', {
   openedAt: text('opened_at'),
   closesAt: text('closes_at'),
 
+  // Set when the organiser files a finished event away, and cleared when they
+  // change their mind. Deliberately its own nullable column rather than a fifth
+  // status value: status is a one-way machine that getCurrentEvent sorts on, and
+  // an 'archived' value would both gamble that ordering and destroy the record of
+  // whether the event ended closed or revealed.
+  archivedAt: text('archived_at'),
+
   createdAt: text('created_at').notNull(),
 })
 

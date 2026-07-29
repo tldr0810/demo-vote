@@ -38,11 +38,17 @@ export async function getEvent(db: Db, eventId: string) {
  * first, then the one being prepared, then the most recent leftover so the page
  * can still say something sensible when nothing is scheduled.
  * tests/voting.test.ts guards it.
+ *
+ * Archived events are excluded outright. Filing an event away is the organiser
+ * saying it is finished with, and the bare address returning nothing at all is
+ * the correct answer when everything has been filed: the landing page then says
+ * there is no event, which is true.
  */
 export async function getCurrentEvent(db: Db) {
   const rows = await db
     .select()
     .from(events)
+    .where(isNull(events.archivedAt))
     .orderBy(
       sql`case ${events.status}
             when 'open'  then 0
@@ -56,8 +62,23 @@ export async function getCurrentEvent(db: Db) {
   return rows[0] ?? null
 }
 
+/**
+ * Every event, archived ones included.
+ *
+ * The organiser's own list is the one place archived events still have to be
+ * reachable, otherwise filing one away would be indistinguishable from deleting
+ * it. The dashboard hides them behind a toggle.
+ */
 export async function listEvents(db: Db) {
   return db.select().from(events).orderBy(sql`${events.createdAt} desc`)
+}
+
+/** Files a finished event away, or takes it back out. */
+export async function setArchived(db: Db, eventId: string, archived: boolean) {
+  await db
+    .update(events)
+    .set({ archivedAt: archived ? nowIso() : null })
+    .where(eq(events.id, eventId))
 }
 
 /**

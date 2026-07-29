@@ -4,6 +4,7 @@ import {
   getAdminState,
   getCodesCsv,
   getPublicResults,
+  postAdminArchive,
   postAdminEvent,
   postAdminSession,
   postAdminStatus,
@@ -96,6 +97,7 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     if (action === 'codes' && method === 'POST') return postCodes(request, env, eventId)
     if (action === 'codes.csv' && method === 'GET') return getCodesCsv(request, env, eventId)
     if (action === 'status' && method === 'POST') return postAdminStatus(request, env, eventId)
+    if (action === 'archive' && method === 'POST') return postAdminArchive(request, env, eventId)
     if (action === 'results' && method === 'GET') return getAdminResults(request, env, eventId)
   }
 

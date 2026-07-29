@@ -28,6 +28,10 @@ export function Admin() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [results, setResults] = useState<AdminResults | null>(null)
   const [busy, setBusy] = useState(false)
+  // Archived events stay out of the way until asked for. By the twentieth event
+  // the picker is mostly history, and the one being run today is the only one
+  // anybody is looking for.
+  const [showArchived, setShowArchived] = useState(false)
 
   const refreshState = useCallback(async () => {
     const result = await api.get<{ events: AdminEvent[] }>('/api/admin/state')
@@ -44,7 +48,19 @@ export function Admin() {
     void refreshState()
   }, [refreshState])
 
-  const selected = events.find((event) => event.id === selectedId) ?? null
+  const archivedCount = events.filter((event) => event.archivedAt).length
+  const listed = showArchived ? events : events.filter((event) => !event.archivedAt)
+  const selected = listed.find((event) => event.id === selectedId) ?? null
+
+  // Archiving the event on screen, or hiding the archive again while an archived
+  // event is selected, leaves the selection pointing at something no longer in
+  // the list. Fall to the newest of what is left rather than showing an empty
+  // dashboard that looks like the data went missing.
+  useEffect(() => {
+    if (selected || listed.length === 0) return
+    setSelectedId(listed[0]!.id)
+    setResults(null)
+  }, [selected, listed])
 
   // The dashboard is the only live view of the tally, so it polls while voting
   // is running and stops as soon as it is not.
@@ -171,19 +187,37 @@ export function Admin() {
         {/* A select rather than a row of buttons: this tool is meant to be
             reused, and by the twentieth event a button row would wrap into a
             wall. Newest first, since that is almost always the one wanted. */}
-        {events.length > 1 ? (
+        {listed.length > 1 ? (
           <EventPicker
             label="Event"
             value={selectedId ?? ''}
-            options={events.map((event) => ({
+            options={listed.map((event) => ({
               id: event.id,
-              label: `${event.name} · ${STATUS_LABEL[event.status]}`,
+              label: `${event.name} · ${
+                event.archivedAt ? 'Archived' : STATUS_LABEL[event.status]
+              }`,
             }))}
             onChange={(id) => {
               setSelectedId(id)
               setResults(null)
             }}
           />
+        ) : null}
+
+        {/* A button rather than a checkbox: a native checkbox is drawn by the
+            operating system, so it would arrive looking like macOS on one laptop
+            and Windows on the next. Same reasoning as EventPicker. */}
+        {archivedCount > 0 ? (
+          <div className="row">
+            <button
+              className="btn btn--ghost btn--sm"
+              type="button"
+              aria-pressed={showArchived}
+              onClick={() => setShowArchived((current) => !current)}
+            >
+              {showArchived ? 'Hide archived' : `Show archived (${archivedCount})`}
+            </button>
+          </div>
         ) : null}
 
         {selected ? (
@@ -193,7 +227,15 @@ export function Admin() {
             busy={busy}
             onStatus={(status) => act(`/api/admin/event/${selected.id}/status`, { status })}
             onGenerate={(count) => act(`/api/admin/event/${selected.id}/codes`, { count })}
+            onArchive={(archived) =>
+              act(`/api/admin/event/${selected.id}/archive`, { archived })
+            }
           />
+        ) : events.length > 0 ? (
+          <p>
+            Every event is archived. Show archived to bring one back, or create a new one
+            above.
+          </p>
         ) : (
           <p>No events yet. Create one above.</p>
         )}
@@ -339,12 +381,14 @@ function EventPanel({
   busy,
   onStatus,
   onGenerate,
+  onArchive,
 }: {
   event: AdminEvent
   results: AdminResults | null
   busy: boolean
   onStatus: (status: EventStatus) => Promise<unknown>
   onGenerate: (count: number) => Promise<unknown>
+  onArchive: (archived: boolean) => Promise<unknown>
 }) {
   const [count, setCount] = useState(100)
   const [generated, setGenerated] = useState<string[] | null>(null)
@@ -358,9 +402,15 @@ function EventPanel({
       <div className="panel">
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <h2>{event.name}</h2>
-          <span className="pill" data-status={event.status}>
-            {STATUS_LABEL[event.status]}
-          </span>
+          <div className="row">
+            {/* The status it ended on is kept, which is the reason archiving is
+                not a fifth status value: "archived" alone would lose whether this
+                event finished closed or revealed. */}
+            {event.archivedAt ? <span className="pill">Archived</span> : null}
+            <span className="pill" data-status={event.status}>
+              {STATUS_LABEL[event.status]}
+            </span>
+          </div>
         </div>
 
         <div className="stats">
@@ -451,6 +501,30 @@ function EventPanel({
             <a className="btn btn--ghost" href={`/screen/${event.id}`} target="_blank" rel="noreferrer">
               Open big screen
             </a>
+          ) : null}
+
+          {/* Only a finished event can be filed away, and filing is reversible.
+              Archiving takes it out of the landing page's reckoning, so a draft
+              or a live event must not be archivable while a room is being told to
+              scan for it. */}
+          {event.archivedAt ? (
+            <button
+              className="btn btn--ghost"
+              type="button"
+              disabled={busy}
+              onClick={() => void onArchive(false)}
+            >
+              Unarchive
+            </button>
+          ) : event.status === 'closed' || event.status === 'revealed' ? (
+            <button
+              className="btn btn--ghost"
+              type="button"
+              disabled={busy}
+              onClick={() => void onArchive(true)}
+            >
+              Archive
+            </button>
           ) : null}
         </div>
       </div>

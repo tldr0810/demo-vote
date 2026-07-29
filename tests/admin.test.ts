@@ -375,6 +375,95 @@ describe('the tally', () => {
   })
 })
 
+describe('archiving', () => {
+  async function archive(cookie: string, eventId: string, archived: boolean) {
+    return api(`/api/admin/event/${eventId}/archive`, {
+      method: 'POST',
+      cookie,
+      body: JSON.stringify({ archived }),
+    })
+  }
+
+  it('files a revealed event away and takes it back', async () => {
+    const cookie = await login()
+    const eventId = await createEvent(cookie)
+    for (const status of ['open', 'closed', 'revealed'] as const) {
+      await api(`/api/admin/event/${eventId}/status`, {
+        method: 'POST',
+        cookie,
+        body: JSON.stringify({ status }),
+      })
+    }
+
+    const filed = await archive(cookie, eventId, true)
+    expect(filed.status).toBe(200)
+    expect(await filed.json()).toMatchObject({ event: { status: 'revealed' } })
+    // The status it ended on survives being archived. That is the whole reason
+    // this is a timestamp and not a fifth status value.
+    const row = await env.DB.prepare('SELECT status, archived_at FROM events WHERE id = ?')
+      .bind(eventId)
+      .first<{ status: string; archived_at: string | null }>()
+    expect(row?.status).toBe('revealed')
+    expect(row?.archived_at).toBeTruthy()
+
+    const back = await archive(cookie, eventId, false)
+    expect(back.status).toBe(200)
+    const after = await env.DB.prepare('SELECT archived_at FROM events WHERE id = ?')
+      .bind(eventId)
+      .first<{ archived_at: string | null }>()
+    expect(after?.archived_at).toBeNull()
+  })
+
+  it('refuses to archive a draft or a live event', async () => {
+    // Archiving hides an event from the landing page. Doing that to an event a
+    // room is being told to scan for is the failure this prevents.
+    const cookie = await login()
+    const eventId = await createEvent(cookie)
+
+    const draft = await archive(cookie, eventId, true)
+    expect(draft.status).toBe(409)
+    expect(await draft.json()).toMatchObject({ error: 'INVALID_TRANSITION' })
+
+    await api(`/api/admin/event/${eventId}/status`, {
+      method: 'POST',
+      cookie,
+      body: JSON.stringify({ status: 'open' }),
+    })
+    const live = await archive(cookie, eventId, true)
+    expect(live.status).toBe(409)
+  })
+
+  it('requires an organiser session', async () => {
+    const cookie = await login()
+    const eventId = await createEvent(cookie)
+    const response = await api(`/api/admin/event/${eventId}/archive`, {
+      method: 'POST',
+      body: JSON.stringify({ archived: true }),
+    })
+    expect(response.status).toBe(401)
+  })
+
+  it('still lists archived events for the organiser', async () => {
+    // Hiding them from the dashboard as well would make filing indistinguishable
+    // from deleting.
+    const cookie = await login()
+    const eventId = await createEvent(cookie)
+    for (const status of ['open', 'closed'] as const) {
+      await api(`/api/admin/event/${eventId}/status`, {
+        method: 'POST',
+        cookie,
+        body: JSON.stringify({ status }),
+      })
+    }
+    await archive(cookie, eventId, true)
+
+    const state = await (await api('/api/admin/state', { cookie })).json<{
+      events: { id: string; archivedAt: string | null }[]
+    }>()
+    expect(state.events.find((event) => event.id === eventId)?.archivedAt).toBeTruthy()
+  })
+})
+
 describe('health', () => {
   it('reports the database, not just the configuration', async () => {
     // A health check that reads only its own secrets answers "ok" from a

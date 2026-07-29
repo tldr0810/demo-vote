@@ -27,6 +27,7 @@ import {
   listEvents,
   newId,
   nowIso,
+  setArchived,
   secondsRemaining,
   type Db,
 } from '../data'
@@ -289,6 +290,40 @@ export async function postAdminStatus(
 
   const updated = await getEvent(db, eventId)
   return json({ ok: true, event: updated })
+}
+
+/**
+ * POST /api/admin/event/:id/archive — file a finished event away, or take it back.
+ *
+ * Archiving is not a status. `status` is a one-way machine that getCurrentEvent
+ * sorts on, so adding a fifth value would gamble that ordering and would also
+ * throw away the record of whether the event ended closed or revealed. It is a
+ * nullable timestamp instead, and it is reversible.
+ */
+export async function postAdminArchive(
+  request: Request,
+  env: Env,
+  eventId: string,
+): Promise<Response> {
+  const denied = await requireAdmin(request, env)
+  if (denied) return denied
+
+  const body = await readJson<{ archived?: boolean }>(request)
+  if (typeof body?.archived !== 'boolean') return fail('BAD_REQUEST', 400)
+
+  const db = getDb(env)
+  const event = await getEvent(db, eventId)
+  if (!event) return fail('EVENT_NOT_FOUND', 404)
+
+  // Only something finished can be filed away. Archiving a draft or a live event
+  // would hide it from the landing page while people in the room were being told
+  // to scan for it.
+  if (body.archived && event.status !== 'closed' && event.status !== 'revealed') {
+    return fail('INVALID_TRANSITION', 409)
+  }
+
+  await setArchived(db, eventId, body.archived)
+  return json({ ok: true, event: await getEvent(db, eventId) })
 }
 
 export async function getAdminResults(
