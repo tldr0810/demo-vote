@@ -22,8 +22,11 @@ export function Vote({ eventId }: { eventId: string | null }) {
   const rootRef = useRef<HTMLDivElement>(null)
   const entryCardRef = useRef<HTMLDivElement>(null)
 
-  const loadBallot = useCallback(async () => {
-    const result = await api.get<Ballot>('/api/ballot')
+  // Always asked for by event. A cookie left over from another event is refused
+  // rather than answered, which is what stops a voter holding a live session
+  // elsewhere from being dropped into that event instead of this one.
+  const loadBallot = useCallback(async (forEventId: string) => {
+    const result = await api.get<Ballot>(`/api/ballot?eventId=${encodeURIComponent(forEventId)}`)
     if (!result.ok) return result
     setBallot(result.data)
     setPhase(result.data.hasVoted ? 'done' : 'ballot')
@@ -48,7 +51,9 @@ export function Vote({ eventId }: { eventId: string | null }) {
       }
       setEvent(eventResult.data)
 
-      const ballotResult = await api.get<Ballot>('/api/ballot')
+      const ballotResult = await api.get<Ballot>(
+        `/api/ballot?eventId=${encodeURIComponent(eventResult.data.id)}`,
+      )
       if (cancelled) return
 
       if (ballotResult.ok) {
@@ -86,7 +91,7 @@ export function Vote({ eventId }: { eventId: string | null }) {
       return
     }
 
-    const ballotResult = await loadBallot()
+    const ballotResult = await loadBallot(event.id)
     setBusy(false)
     if (!ballotResult.ok) setError(messageFor(ballotResult.error))
   }

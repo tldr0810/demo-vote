@@ -105,11 +105,14 @@ export async function postSession(request: Request, env: Env): Promise<Response>
 }
 
 /**
- * GET /api/ballot — what this voter is allowed to see.
+ * GET /api/ballot?eventId=<id> — what this voter is allowed to see.
  *
  * Carries no vote counts of any kind. The tally is organiser-only until the
  * reveal, and leaving it out of this payload is what makes that true: a
  * curious attendee reading the network tab finds nothing to read.
+ *
+ * `eventId` is the event the caller is actually looking at. It is optional so
+ * that an older client still works, but the front end always sends it.
  */
 export async function getBallot(request: Request, env: Env): Promise<Response> {
   const secret = env.VOTE_HMAC_KEY
@@ -117,6 +120,14 @@ export async function getBallot(request: Request, env: Env): Promise<Response> {
 
   const session = await currentVoter(request, secret)
   if (!session) return fail('NO_SESSION', 401)
+
+  // A session speaks for exactly one event, so a cookie issued for a different
+  // one counts as no cookie at all. Answering it anyway would resolve the event
+  // from the cookie and hand somebody who just scanned this event's QR the
+  // receipt for a vote they cast in another, with no way to reach this ballot.
+  // Two events can be open at the same time; this is what keeps them apart.
+  const asked = new URL(request.url).searchParams.get('eventId')
+  if (asked && asked !== session.e) return fail('NO_SESSION', 401)
 
   const db = getDb(env)
   const event = await getEvent(db, session.e)

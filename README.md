@@ -97,8 +97,12 @@ ones stay in the dropdown with their results intact.
 **Each event gets its own QR code.** The one `/admin` renders encodes
 `/v/<eventId>`, so a scan can only ever land on the event it was made for. There
 is no precedence to reason about and nothing to get wrong. It also means two
-events can run at once, which is the only way a multi-track day works: every
-voter session carries its own event id, so parallel votes do not interfere.
+events can run at once, which is the only way a multi-track day works: a session
+belongs to one event, the ballot is asked for by event, and a cookie issued for
+another is refused rather than answered. Both halves matter, and
+`tests/voting.test.ts` covers them. Without the refusal, somebody holding a live
+session for one event who scans the other's QR is handed their existing receipt
+and can never reach the vote in front of them.
 
 The neatest place for that QR is the printed slip itself. Codes are reprinted for
 every event anyway, so putting the QR on the same sheet costs nothing, removes

@@ -469,3 +469,59 @@ describe('the ballot', () => {
     expect(body.hasVoted).toBe(true)
   })
 })
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Two events can be open at once, which is what a multi-track day needs. What
+ * makes it work is that a session belongs to one event and cannot answer for
+ * another: the ballot is asked for by event, and a cookie issued elsewhere is
+ * treated as no cookie at all.
+ *
+ * Without this, somebody holding a live session for one event who scans the
+ * other event's QR is silently dropped back into the first: the ballot endpoint
+ * resolves the event from the cookie, so they are shown their existing receipt
+ * and never get to vote in the event actually in front of them.
+ */
+describe('two events running at once', () => {
+  it("refuses to serve one event's ballot to a session from another", async () => {
+    const first = await seed()
+    const second = await seed()
+    const cookie = await redeem(first.eventId, first.codes[0]!)
+
+    const own = await api(`/api/ballot?eventId=${first.eventId}`, { cookie })
+    expect(own.status).toBe(200)
+
+    const other = await api(`/api/ballot?eventId=${second.eventId}`, { cookie })
+    expect(other.status).toBe(401)
+    expect((await other.json<{ error: string }>()).error).toBe('NO_SESSION')
+  })
+
+  it('lets somebody who voted in one event vote once in the other', async () => {
+    const first = await seed()
+    const second = await seed()
+
+    const firstCookie = await redeem(first.eventId, first.codes[0]!)
+    await api('/api/vote', {
+      method: 'POST',
+      cookie: firstCookie,
+      body: JSON.stringify({ demoId: first.demoIds[0] }),
+    })
+
+    // Scanning the other event's QR while still holding the first session must
+    // not hand back the receipt for the vote just cast.
+    const stale = await api(`/api/ballot?eventId=${second.eventId}`, { cookie: firstCookie })
+    expect(stale.status).toBe(401)
+
+    const secondCookie = await redeem(second.eventId, second.codes[0]!)
+    const cast = await api('/api/vote', {
+      method: 'POST',
+      cookie: secondCookie,
+      body: JSON.stringify({ demoId: second.demoIds[0] }),
+    })
+    expect(cast.status).toBe(200)
+
+    expect(await countVotes(first.eventId)).toBe(1)
+    expect(await countVotes(second.eventId)).toBe(1)
+  })
+})
