@@ -2,8 +2,9 @@
 
 Live audience voting for demo days and pitch sessions. Attendees scan a QR code,
 redeem the one-time code printed on their check-in slip, and cast a single
-ballot. Organisers watch a live tally and reveal the standings on a projector.
-Runs on Cloudflare Workers with D1.
+ballot. Organisers watch a live tally, then reveal the standings on the projector
+and on every phone in the room at the same time. Runs on Cloudflare Workers
+with D1.
 
 MIT licensed. Fork it and run your own event.
 
@@ -47,8 +48,10 @@ asserts the database ends up with exactly one row.
 6. **While voting.** The dashboard refreshes every two seconds and shows codes
    issued, redeemed and voted.
 7. **Time up.** It closes itself, or press "Close now" to finish early.
-8. **Reveal.** Press "Reveal results" and put `/screen/<eventId>` on the
-   projector.
+8. **Reveal.** Press "Reveal results". Put `/screen/<eventId>` on the projector;
+   every phone still on the voting page turns into the standings by itself within
+   a few seconds, including the phones of people who never had a code. Nobody has
+   to be told to refresh anything.
 
 Nobody but the organiser can see the tally before the reveal. Voter-facing API
 responses contain no counts at all, so there is nothing to find in the network
@@ -163,7 +166,10 @@ scan QR ─▶ /v/:eventId ─▶ enter code ─▶ POST /api/session ─▶ sig
                                               votes.code UNIQUE ─▶ one ballot
 organiser ─▶ /admin ─▶ polls every 2s ─▶ ranked bars
                     └─ open / close / reveal
-projector ─▶ /screen/:eventId  (readable only after the reveal)
+                                  │
+       after the reveal ──────────┼──▶ projector  /screen/:eventId
+                                  └──▶ every phone, polling /api/results/:eventId
+                                       every 8s until it lands, then stopping
 ```
 
 | Path | Contents |

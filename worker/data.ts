@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull, sql } from 'drizzle-orm'
 import { drizzle, type DrizzleD1Database } from 'drizzle-orm/d1'
 import * as schema from '../db/schema'
-import { codes, demos, events, votes, type DemoRow } from '../db/schema'
+import { codes, demos, events, votes, type DemoRow, type EventRow } from '../db/schema'
 
 export type Db = DrizzleD1Database<typeof schema>
 
@@ -68,16 +68,13 @@ export async function listEvents(db: Db) {
  * the deadline whenever nobody presses the close button, which during a live
  * event is exactly what happens.
  */
-export function isVotingLive(event: typeof events.$inferSelect, at: Date = new Date()): boolean {
+export function isVotingLive(event: EventRow, at: Date = new Date()): boolean {
   if (event.status !== 'open') return false
   if (!event.closesAt) return false
   return at.getTime() < Date.parse(event.closesAt)
 }
 
-export function secondsRemaining(
-  event: typeof events.$inferSelect,
-  at: Date = new Date(),
-): number {
+export function secondsRemaining(event: EventRow, at: Date = new Date()): number {
   if (!event.closesAt) return 0
   return Math.max(0, Math.ceil((Date.parse(event.closesAt) - at.getTime()) / 1000))
 }
@@ -162,6 +159,11 @@ export async function castVote(
   }
 }
 
+/**
+ * D1 surfaces constraint violations as an opaque Error whose message carries the
+ * SQLite text. Losing a race on votes.code is expected behaviour, not a fault,
+ * so it has to be distinguishable from a real database failure.
+ */
 function isUniqueViolationMessage(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return message.includes('UNIQUE constraint failed')

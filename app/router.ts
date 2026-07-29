@@ -4,11 +4,9 @@ import { useEffect, useState } from 'react'
 // and /screen/:id would add a dependency, a bundle, and a CVE surface to
 // something that fits in twenty lines.
 
-export function navigate(to: string): void {
-  if (to === window.location.pathname) return
-  window.history.pushState({}, '', to)
-  window.dispatchEvent(new PopStateEvent('popstate'))
-}
+// There is no programmatic navigation: every link out of a screen (the big-screen
+// view from the dashboard) is a full page load, which is the right thing for a URL
+// somebody opens on a venue machine.
 
 export function usePathname(): string {
   const [pathname, setPathname] = useState(() => window.location.pathname)

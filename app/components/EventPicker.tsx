@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 
-export type PickerOption = { id: string; label: string }
+type PickerOption = { id: string; label: string }
 
 /**
  * The event picker: a listbox rather than a native `<select>`.

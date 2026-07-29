@@ -23,6 +23,7 @@ const MESSAGES: Record<string, string> = {
   NOT_CONFIGURED: 'This deployment is not finished being set up. Contact the organisers.',
   NETWORK: 'Could not reach the server. Check your connection and try again.',
   NOT_FOUND: 'Not found.',
+  INTERNAL: 'Something went wrong at our end. Try again, and tell a steward if it keeps happening.',
 }
 
 export function messageFor(code: string): string {

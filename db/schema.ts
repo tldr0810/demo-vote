@@ -90,7 +90,8 @@ export const votes = sqliteTable(
   (table) => [index('votes_event_demo_idx').on(table.eventId, table.demoId)],
 )
 
+// Only the two the Worker actually names. `codes` and `votes` rows are always
+// handled through the query helpers in worker/data.ts, which infer their own
+// shapes, so a row alias for them would be an export with no reader.
 export type EventRow = typeof events.$inferSelect
 export type DemoRow = typeof demos.$inferSelect
-export type CodeRow = typeof codes.$inferSelect
-export type VoteRow = typeof votes.$inferSelect

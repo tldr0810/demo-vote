@@ -38,6 +38,10 @@ export type ApiErrorCode =
   // Deployment
   | 'NOT_CONFIGURED'
   | 'NOT_FOUND'
+  // The catch-all in the Worker entry point. In the union because it is a code
+  // the API really can return, and a code the API can return but the type does
+  // not name is a code nobody remembers to write a message for.
+  | 'INTERNAL'
 
 export async function readJson<T>(request: Request): Promise<T | null> {
   try {
@@ -49,14 +53,4 @@ export async function readJson<T>(request: Request): Promise<T | null> {
 
 export function clientIp(request: Request): string {
   return request.headers.get('CF-Connecting-IP') ?? 'unknown'
-}
-
-/**
- * D1 surfaces constraint violations as an opaque Error whose message carries the
- * SQLite text. Losing a race on votes.code is expected behaviour, not a fault,
- * so it has to be distinguishable from a real database failure.
- */
-export function isUniqueViolation(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return message.includes('UNIQUE constraint failed')
 }

@@ -34,7 +34,7 @@ export default {
     } catch (error) {
       // Never leak a stack trace or SQL text to a browser mid-event.
       console.error('unhandled', error)
-      return json({ error: 'INTERNAL' }, { status: 500 })
+      return fail('INTERNAL', 500)
     }
   },
 } satisfies ExportedHandler<Env>
