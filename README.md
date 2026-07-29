@@ -39,6 +39,11 @@ asserts the database ends up with exactly one row.
 2. **Generate codes.** Enter how many you need and generate, or download the CSV
    to print from. Codes are 8 characters from an alphabet that deliberately
    omits `I L O U 0 1`, so nothing on a printed slip can be misread.
+
+   The rate limit on redemption is sized for a room rather than for a person:
+   venue wifi puts every phone behind one NAT address, so the whole audience
+   shares one limiter key. What makes guessing hopeless is the 6.6e11-wide
+   keyspace, not the limit. See the arithmetic in `wrangler.toml`.
 3. **Make the QR code.** `/admin` renders the QR for the event you are setting up
    and offers it as an SVG download. It encodes `/v/<eventId>`, so it belongs to
    that event and to nothing else. Put it on the slips, the running order or a

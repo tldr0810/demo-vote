@@ -34,14 +34,25 @@ database_name = "demo-vote-db"
 database_id = "00000000-0000-4000-8000-000000000000"
 migrations_dir = "drizzle"
 
-# Per-IP limit on code redemption. Codes are 8 chars from a 30-char alphabet
-# (~6.6e11 combinations), so this exists to make online guessing hopeless
-# rather than merely impractical.
+# Per-IP ceiling on code redemption.
+#
+# Sized for a room, not for a person. Venue wifi puts every phone behind one NAT
+# address, so this key is shared by the whole audience: the organiser says
+# "voting is open" and three hundred people type their code inside the next
+# minute or two, all of it arriving from one IP. This was 10 per 60s, which is a
+# sensible number for one human and a denial of service against an actual event.
+#
+# The alphabet is what makes guessing hopeless, not this limit. Codes are 8
+# characters from a 30-character alphabet, so 30^8 is about 6.6e11 combinations.
+# At 600 attempts a minute, a guesser gets 864,000 tries a day, and the chance of
+# landing on any one of three hundred live codes is about 4e-4 a day. This limit
+# exists to cap the database work a single address can demand, which is what it
+# can actually be sized for.
 [[ratelimits]]
 name = "SESSION_RATE_LIMITER"
 namespace_id = "2001"
 [ratelimits.simple]
-limit = 10
+limit = 600
 period = 60
 
 # Per-IP limit on admin login attempts, layered under the per-account lockout
