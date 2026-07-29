@@ -8,6 +8,18 @@ import { joinNames, leaders } from '../ranking'
 type Payload = { event: { name: string }; tally: TallyRow[] }
 
 /**
+ * When the standings rows start fading in: 0.6s of heading, then a held beat.
+ *
+ * Named because two things have to agree about it. The rows are brought in by a
+ * `from` tween, and GSAP renders a `from` immediately on creation even when it
+ * sits later in a timeline, so the rows are pinned at opacity 0 from the first
+ * frame. ResultsBars grows its bars on the same render, so it has to be told to
+ * wait: otherwise the growth happens entirely inside those invisible rows and
+ * the reveal becomes finished bars flying in.
+ */
+const ROWS_IN_AT = 0.6 + 0.45
+
+/**
  * The projector view.
  *
  * Deliberately has no controls and no admin session: it is a URL you can open
@@ -83,7 +95,7 @@ export function Screen({ eventId }: { eventId: string }) {
             ease: 'power3.out',
             clearProps: 'all',
           },
-          '+=0.45',
+          ROWS_IN_AT,
         )
         .from(
           '[data-anim="winner"]',
@@ -145,7 +157,9 @@ export function Screen({ eventId }: { eventId: string }) {
         {winners.length > 0 ? joinNames(winners.map((row) => row.name)) : 'No votes were cast'}
       </h1>
 
-      <ResultsBars tally={payload.tally} revealed />
+      {/* Starts growing a fraction after the rows begin arriving, so the first
+          thing the room sees in a row is an empty track, and then it fills. */}
+      <ResultsBars tally={payload.tally} revealed fillDelay={ROWS_IN_AT + 0.15} />
     </div>
   )
 }

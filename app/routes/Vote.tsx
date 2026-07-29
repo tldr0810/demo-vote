@@ -36,6 +36,10 @@ export function Vote({ eventId }: { eventId: string | null }) {
 
   const rootRef = useRef<HTMLDivElement>(null)
   const entryCardRef = useRef<HTMLDivElement>(null)
+  const confirmBarRef = useRef<HTMLDivElement>(null)
+  // The bar stays mounted through its exit tween, so dismissing it is a state of
+  // its own rather than the absence of a selection.
+  const [closingBar, setClosingBar] = useState(false)
 
   // Always asked for by event. A cookie left over from another event is refused
   // rather than answered, which is what stops a voter holding a live session
@@ -175,6 +179,31 @@ export function Vote({ eventId }: { eventId: string | null }) {
     if (!ballotResult.ok) setError(messageFor(ballotResult.error))
   }
 
+  /**
+   * Sends the confirm bar back down before unmounting it.
+   *
+   * It slid up over 0.38s and then vanished in a single frame, because "Go back"
+   * cleared the selection the bar's own existence was conditional on. Faster on
+   * the way out than in, and eased in rather than out: leaving should feel like
+   * the bar getting out of the way, not like a second announcement.
+   */
+  function dismissConfirmBar() {
+    if (!motionOk() || !confirmBarRef.current) {
+      setSelected(null)
+      return
+    }
+    setClosingBar(true)
+    gsap.to(confirmBarRef.current, {
+      y: '100%',
+      duration: 0.26,
+      ease: 'power2.in',
+      onComplete: () => {
+        setSelected(null)
+        setClosingBar(false)
+      },
+    })
+  }
+
   async function submitVote() {
     if (busy || !selected || !ballot) return
     setBusy(true)
@@ -188,7 +217,21 @@ export function Vote({ eventId }: { eventId: string | null }) {
       setError(messageFor(result.error))
       // ALREADY_VOTED means another tab got there first: show the receipt
       // rather than leaving a dead ballot on screen.
-      if (result.error === 'ALREADY_VOTED') setPhase('done')
+      if (result.error === 'ALREADY_VOTED') {
+        setPhase('done')
+        return
+      }
+      // The same treatment a wrong code gets, for the same reason: a failure the
+      // voter caused nothing to move for is a failure they will not notice
+      // before pressing again. The bar carries it because the bar holds the
+      // button that just failed.
+      if (motionOk()) {
+        gsap.fromTo(
+          confirmBarRef.current,
+          { x: -9 },
+          { x: 0, duration: 0.5, ease: 'elastic.out(1, 0.32)', clearProps: 'x' },
+        )
+      }
       return
     }
 
@@ -346,6 +389,7 @@ export function Vote({ eventId }: { eventId: string | null }) {
             className="btn btn--block"
             type="submit"
             disabled={busy || code.length !== CODE_LENGTH}
+            data-busy={busy}
           >
             {busy ? 'Checking' : 'Start voting'}
           </button>
@@ -385,7 +429,7 @@ export function Vote({ eventId }: { eventId: string | null }) {
           </div>
 
           {selected ? (
-            <div className="confirmbar">
+            <div className="confirmbar" ref={confirmBarRef} data-closing={closingBar}>
               <div className="confirmbar__inner">
                 <div className="confirmbar__warning">
                   You have chosen{' '}
@@ -398,7 +442,7 @@ export function Vote({ eventId }: { eventId: string | null }) {
                   <button
                     className="btn btn--ghost btn--sm"
                     type="button"
-                    onClick={() => setSelected(null)}
+                    onClick={dismissConfirmBar}
                     disabled={busy}
                   >
                     Go back
@@ -408,6 +452,7 @@ export function Vote({ eventId }: { eventId: string | null }) {
                     type="button"
                     onClick={submitVote}
                     disabled={busy}
+                    data-busy={busy}
                     style={{ flex: 1 }}
                   >
                     {busy ? 'Submitting' : 'Cast my vote'}

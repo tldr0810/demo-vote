@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import type { TallyRow } from '../api'
 import { Flip, gsap, motionOk, useGSAP } from '../motion'
 import { rankTally } from '../ranking'
+import { RollingNumber } from './RollingNumber'
 
 /**
  * The tally, as a ranked list of bars.
@@ -13,17 +14,40 @@ import { rankTally } from '../ranking'
  * "Demo 4 just overtook Demo 2" — the only thing anyone in the room is watching
  * for.
  */
-export function ResultsBars({ tally, revealed }: { tally: TallyRow[]; revealed: boolean }) {
+export function ResultsBars({
+  tally,
+  revealed,
+  fillDelay = 0,
+}: {
+  tally: TallyRow[]
+  revealed: boolean
+  /**
+   * Holds the bars at zero for this many seconds before they grow.
+   *
+   * The projector fades its rows in on a timeline that starts them at 1.05s. The
+   * fill tween is created by this component on the same render, so without a
+   * matching delay the bars finish growing while their rows are still at opacity
+   * 0 and the room sees full-length bars fly in rather than bars filling up.
+   */
+  fillDelay?: number
+}) {
   const listRef = useRef<HTMLUListElement>(null)
   const flipState = useRef<Flip.FlipState | null>(null)
+  const capturedFor = useRef<string | null>(null)
 
   const total = tally.reduce((sum, row) => sum + row.votes, 0)
   const leaderVotes = tally[0]?.votes ?? 0
 
-  // Captured during render, while the DOM still holds the previous order.
-  // React has not committed the new children yet at this point, and this only
-  // reads layout, never writes it.
-  if (listRef.current) {
+  // The dashboard polls every two seconds and hands us a fresh array each time,
+  // so the array identity changes constantly while the numbers in it do not.
+  // Keying the work to the values means an unchanged tally costs nothing: no
+  // layout read, no tween, no rAF burning for the hour a dashboard is left open.
+  const signature = tally.map((row) => `${row.demoId}:${row.votes}`).join(',')
+
+  // Captured during render, while the DOM still holds the previous order. React
+  // has not committed the new children yet at this point, and this only reads
+  // layout, never writes it.
+  if (listRef.current && signature !== capturedFor.current) {
     flipState.current = Flip.getState(listRef.current.querySelectorAll('.result'))
   }
 
@@ -31,6 +55,7 @@ export function ResultsBars({ tally, revealed }: { tally: TallyRow[]; revealed: 
     () => {
       const list = listRef.current
       if (!list) return
+      capturedFor.current = signature
       const animate = motionOk()
 
       if (flipState.current && animate) {
@@ -45,12 +70,13 @@ export function ResultsBars({ tally, revealed }: { tally: TallyRow[]; revealed: 
         gsap.to(fill, {
           scaleX: share,
           duration: animate ? 0.7 : 0,
+          delay: animate ? fillDelay : 0,
           ease: 'power2.out',
           overwrite: true,
         })
       })
     },
-    { dependencies: [tally], scope: listRef },
+    { dependencies: [signature, fillDelay], scope: listRef },
   )
 
   if (tally.length === 0) {
@@ -84,8 +110,10 @@ export function ResultsBars({ tally, revealed }: { tally: TallyRow[]; revealed: 
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <span className="result__count">{row.votes}</span>
-              <div className="label">{percent}%</div>
+              <RollingNumber className="result__count" value={row.votes} />
+              <div className="label">
+                <RollingNumber value={percent} suffix="%" />
+              </div>
             </div>
           </li>
         )

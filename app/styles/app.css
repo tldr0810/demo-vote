@@ -231,6 +231,10 @@ p {
   padding: calc(var(--step) * 1.75) calc(var(--step) * 2);
   font-family: var(--sans);
   font-size: 1rem;
+  /* The focus ring is drawn by :focus-visible; this is the border underneath it,
+     which otherwise snapped to the accent colour. Shared with .picker__button,
+     whose open state uses the same border. */
+  transition: border-color 140ms ease;
 }
 
 .input:focus {
@@ -298,13 +302,17 @@ p {
   box-shadow: var(--picker-shadow);
   max-height: 15rem;
   overflow-y: auto;
+  transform-origin: top center;
   animation: picker-in 0.14s ease-out;
 }
 
+/* Anchored to the button it belongs to, so the list reads as growing out of the
+   control rather than sliding in from somewhere above it. Stays in CSS: see
+   EventPicker.tsx on why a GSAP `from` cannot own this element. */
 @keyframes picker-in {
   from {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(-4px) scale(0.98);
   }
 }
 
@@ -385,6 +393,21 @@ p {
   cursor: not-allowed;
 }
 
+/* Two hundred phones on congested venue wifi is the constraint this app is built
+   around, so a vote POST can take seconds. A dimmed button with static text
+   looks like a button that did not register the tap, and the honest response to
+   that is to press it again. The pulse says the request is in flight.
+   Deliberately not a spinner: no icons anywhere in this app. */
+.btn[data-busy='true'] {
+  animation: btn-busy 1.1s ease-in-out infinite;
+}
+
+@keyframes btn-busy {
+  50% {
+    opacity: 0.62;
+  }
+}
+
 .btn--ghost {
   background: transparent;
   color: var(--text);
@@ -431,7 +454,16 @@ p {
   font-family: inherit;
   font-size: inherit;
   cursor: pointer;
-  transition: border-color 140ms ease, background 140ms ease;
+  transition: border-color 140ms ease, background 140ms ease, transform 120ms ease;
+}
+
+/* The one press that matters in this whole app, and it was the only button
+   without a pressed state. A phone has no hover to confirm the target first, so
+   between the finger landing and React re-rendering the card there was nothing
+   at all. Smaller travel than .btn: these cards are large, and a large surface
+   moving as far as a pill reads as the layout slipping. */
+.demo:active {
+  transform: scale(0.985);
 }
 
 .demo__slot {
@@ -486,6 +518,20 @@ p {
   stroke: var(--line);
 }
 
+/* Pressure should rise, not switch. The tone changes at five minutes and at one
+   minute (CountdownRing.tsx), and stepping straight from emerald to amber mid-
+   ballot reads as a bug in the page rather than as the clock. Half a second is
+   long enough to be felt as a change of state and short enough that nobody
+   watching the ring notices a lag.
+
+   Colour is also the category of motion that reduced-motion should keep, since
+   nothing moves: the block at the end of this file collapses the duration
+   anyway, which is the conservative reading of the preference. */
+.countdown__progress,
+.countdown__value {
+  transition: stroke 500ms ease, color 500ms ease;
+}
+
 .countdown__value {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
@@ -516,6 +562,12 @@ p {
   flex-direction: column;
   gap: calc(var(--step) * 1.5);
   z-index: 10;
+}
+
+/* Set while the bar is playing its exit, which is the one window where it is on
+   screen but no longer represents a live selection. */
+.confirmbar[data-closing='true'] {
+  pointer-events: none;
 }
 
 .confirmbar__inner {
@@ -781,9 +833,14 @@ p {
 }
 
 /*
- * Every timeline in this app is also gated in JS via gsap.matchMedia, so this
- * block is the belt to that braces: any transition that slips through still
- * collapses to an instant state change rather than motion.
+ * Every timeline in this app is also gated in JS, by the motionOk() check in
+ * app/motion.ts, so this block is the belt to that braces: any CSS transition or
+ * keyframe animation that slips through still collapses to an instant state
+ * change rather than motion.
+ *
+ * motionOk() is a plain matchMedia read and deliberately not gsap.matchMedia;
+ * app/motion.ts explains why. This comment used to name gsap.matchMedia, which
+ * pointed the next reader at a mechanism this codebase decided against.
  */
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -3,6 +3,7 @@ import { api, type AdminEvent, type AdminResults, type EventStatus } from '../ap
 import { CountdownRing } from '../components/CountdownRing'
 import { EventPicker } from '../components/EventPicker'
 import { ResultsBars } from '../components/ResultsBars'
+import { RollingNumber } from '../components/RollingNumber'
 import { VoteQr } from '../components/VoteQr'
 import { STATUS_LABEL, messageFor } from '../messages'
 
@@ -364,15 +365,15 @@ function EventPanel({
 
         <div className="stats">
           <div>
-            <span className="stat__value">{stats.issued}</span>
+            <RollingNumber className="stat__value" value={stats.issued} />
             <span className="label">Issued</span>
           </div>
           <div>
-            <span className="stat__value">{stats.activated}</span>
+            <RollingNumber className="stat__value" value={stats.activated} />
             <span className="label">Redeemed</span>
           </div>
           <div>
-            <span className="stat__value">{stats.voted}</span>
+            <RollingNumber className="stat__value" value={stats.voted} />
             <span className="label">Voted</span>
           </div>
           {event.status === 'open' && results ? (
