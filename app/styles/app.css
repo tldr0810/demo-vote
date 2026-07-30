@@ -885,6 +885,10 @@ p {
 /*
  * /admin/print/<eventId> — the sheet of per-attendee slips.
  *
+ * A slip is a QR and the event's name, and nothing else. The code it carries is
+ * not printed: scanning is the way in, and the recovery for a slip that will not
+ * scan is a spare slip rather than eight characters typed into a phone.
+ *
  * The only screen in this app designed for paper, so it opts out of the shell's
  * max width and, below, out of the theme entirely: a slip has to be black on
  * white whatever the organiser's laptop is set to, and a printer asked for the
@@ -936,20 +940,15 @@ p {
 }
 
 .slip__qr {
-  width: 150px;
-  height: 150px;
+  /* Large, because it is the only thing on the slip that does anything, and a
+     bigger target is a faster scan for a phone held at an angle in low light. */
+  width: 190px;
+  height: 190px;
   /* The QR is pinned black on white, so it needs its own white backing to sit
      on when the surface around it is not. */
   background: #ffffff;
   padding: 4px;
   border-radius: 4px;
-}
-
-.slip__code {
-  font-family: var(--mono);
-  font-size: 1.25rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
 }
 
 .slip__hint {

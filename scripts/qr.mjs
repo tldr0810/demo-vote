@@ -93,8 +93,7 @@ if (csvPath) {
     text-align: center; padding: 10mm 4mm; border: 1px dashed #999;
     break-inside: avoid;
   }
-  .slip svg { width: 38mm; height: 38mm; }
-  .code { font-family: ui-monospace, monospace; font-size: 15pt; font-weight: 700; letter-spacing: 0.14em; }
+  .slip svg { width: 46mm; height: 46mm; }
   .hint { font-size: 7pt; line-height: 1.4; color: #444; }
 </style>
 <div class="slips">
@@ -102,8 +101,7 @@ ${slips
   .map(
     (slip) => `  <div class="slip">
     ${slip.svg}
-    <div class="code">${slip.code}</div>
-    <div class="hint">Scan to score the demos. If this will not scan, scan the event QR on display and type the code above.</div>
+    <div class="hint">Scan to score the demos</div>
   </div>`,
   )
   .join('\n')}
@@ -113,7 +111,9 @@ ${slips
   const sheetPath = 'vote-slips.html'
   await writeFile(sheetPath, sheet)
   console.log(`\n  ${slips.length} slips written to ${sheetPath}`)
-  console.log('  Open it in a browser and print. Each slip carries its own code.\n')
+  console.log('  Open it in a browser and print. Each slip carries its own code,')
+  console.log('  in the QR only — print a few spares, since a slip that will not')
+  console.log('  scan cannot be typed in.\n')
   process.exit(0)
 }
 

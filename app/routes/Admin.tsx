@@ -539,8 +539,9 @@ function EventPanel({
         <h2>Voting codes</h2>
         <p>
           One code per person. Print the QR sheet and hand a slip to each person at check-in —
-          scanning it opens their ballot with nothing to type. The code is printed underneath as
-          the fallback, and is 8 characters that never contain I, L, O, U, 0 or 1.
+          scanning it opens their ballot with nothing to type. Print a few spares: the slip carries
+          its code in the QR only, so a slip that will not scan is replaced rather than typed in.
+          The codes themselves are in the CSV, for reading one out to somebody genuinely stuck.
         </p>
         <div className="row">
           <input

@@ -71,14 +71,17 @@ are done".
    keyspace, not the limit. See the arithmetic in `wrangler.toml`.
 3. **Print the slips.** "Print QR slips" opens `/admin/print/<eventId>`: one slip
    per code, each with its own QR encoding `/v/<eventId>?c=<code>`, ready to cut
-   up. Scanning one opens that person's ballot with nothing to type. The code is
-   printed underneath as the fallback for a camera that will not focus.
+   up. Scanning one opens that person's ballot with nothing to type.
+
+   The code is not printed on the slip. Scanning is the way in, and the recovery
+   for a slip that will not scan is another slip rather than eight characters
+   typed into a phone in a dark room — so **print a few spares**. The codes are
+   still in the CSV and on the dashboard, for reading one out to somebody
+   genuinely stuck.
 
    `/admin` also shows a single QR for the event with no code in it. Put it on
-   the wall or the running order slide: it lands on the entry screen, and it is
-   the way back in for anybody whose own slip will not scan — they have their
-   code, but not the address. The printed slips say so. It is also where a
-   steward reading a spare code aloud sends somebody.
+   the wall or the running order slide: it lands on the entry screen, which is
+   where a steward-supplied code gets typed.
 
    Both are built from the address you have `/admin` open on, so open the
    dashboard on the address attendees will use before printing anything.
@@ -171,12 +174,12 @@ costs nothing, removes the question of whether anybody remembered to swap a sign
 on the wall, and makes a mismatch impossible: the slip and its QR come off the
 same page, so they always belong to the same event and to each other.
 
-Scanning your own slip is not the only way in. The code is printed under the QR
-and the shared event QR leads to the screen where it is typed — which is why
-that shared code is worth putting on the wall even though nobody's ballot needs
-it. A phone whose camera will not focus in a dark room is a certainty at some
-point in the evening, and it should cost that person thirty seconds rather than
-their ballot.
+Scanning your own slip is not quite the only way in. A code can still be typed,
+and the shared event QR leads to the screen that takes one — which is why that
+shared code is worth putting on the wall even though nobody's ballot needs it.
+But the slip does not print its own code, so that path runs through a steward
+with the CSV open, and the ordinary answer to a slip that will not scan is to
+hand over a spare. Print more slips than people.
 
 `/` with no event id still resolves to something sensible for anyone who types
 the bare address: the live event if one is running, otherwise the one being set
@@ -206,7 +209,7 @@ a room is being told to scan for it is exactly the failure that rule prevents.
 The cycle each time:
 
 1. `/admin` → **New event** → name it, enter the line-up, set the window
-2. Generate codes, print the QR slips, cut them up
+2. Generate codes, print the QR slips (plus spares), cut them up
 3. Run the event (open, score, close, reveal)
 4. Leave it. The next event starts at step 1 with codes and QRs of its own
 

@@ -126,20 +126,18 @@ export function PrintCodes({ eventId }: { eventId: string }) {
       ) : null}
 
       <div className="slips">
+        {/* The code itself is not printed. It was here as the fallback for a
+            slip that would not scan, but the fallback that actually works is a
+            spare slip: the recovery for a bad piece of paper is another piece of
+            paper, not eight characters typed into a phone in a dark room. The
+            code still exists — it is in the CSV and on the dashboard — so a
+            steward can read one out for somebody genuinely stuck, and the entry
+            screen is still there to receive it. */}
         {slips.map((slip) => (
           <div className="slip" key={slip.code}>
             <div className="slip__event">{event?.name}</div>
-            <img className="slip__qr" src={slip.dataUri} alt="" width={150} height={150} />
-            <div className="slip__code num">{slip.code}</div>
-            {/* Names the shared QR rather than "the address", because the
-                address is not printed here and somebody whose own code will not
-                scan is holding the one thing that cannot help them. The shared
-                code lands on the entry screen, which is where this code is
-                typed. */}
-            <div className="slip__hint">
-              Scan to score the demos. If this will not scan, scan the event QR on display and type
-              the code above.
-            </div>
+            <img className="slip__qr" src={slip.dataUri} alt="" width={190} height={190} />
+            <div className="slip__hint">Scan to score the demos</div>
           </div>
         ))}
       </div>

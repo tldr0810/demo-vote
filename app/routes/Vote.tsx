@@ -471,9 +471,13 @@ export function Vote({ eventId }: { eventId: string | null }) {
           </div>
 
           <h1 data-anim="entry">Enter your voting code</h1>
+          {/* Scanning is the way in, and the slip carries no printed code, so
+              anybody reading this screen either scanned the shared event QR or
+              has a code a steward read out to them. Saying where to get one is
+              the only useful thing this paragraph can do. */}
           <p data-anim="entry">
-            Your code is on the slip you were given at check-in — {CODE_LENGTH} characters, good
-            for one ballot. Scanning the QR code on the slip skips this step.
+            Scanning the QR code on your slip opens your ballot directly. If it will not scan, ask
+            a steward for another slip, or for a code to type here.
           </p>
 
           <div className="field" data-anim="entry" ref={entryCardRef}>
