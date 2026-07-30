@@ -131,9 +131,14 @@ export function PrintCodes({ eventId }: { eventId: string }) {
             <div className="slip__event">{event?.name}</div>
             <img className="slip__qr" src={slip.dataUri} alt="" width={150} height={150} />
             <div className="slip__code num">{slip.code}</div>
+            {/* Names the shared QR rather than "the address", because the
+                address is not printed here and somebody whose own code will not
+                scan is holding the one thing that cannot help them. The shared
+                code lands on the entry screen, which is where this code is
+                typed. */}
             <div className="slip__hint">
-              Scan to score the demos. If scanning fails, open the address on the running order and
-              type this code.
+              Scan to score the demos. If this will not scan, scan the event QR on display and type
+              the code above.
             </div>
           </div>
         ))}

@@ -74,8 +74,10 @@ are done".
    up. Scanning one opens that person's ballot with nothing to type. The code is
    printed underneath as the fallback for a camera that will not focus.
 
-   `/admin` also shows a single QR for the event with no code in it, for the wall
-   or the running order. That one lands on the entry screen, which is where a
+   `/admin` also shows a single QR for the event with no code in it. Put it on
+   the wall or the running order slide: it lands on the entry screen, and it is
+   the way back in for anybody whose own slip will not scan — they have their
+   code, but not the address. The printed slips say so. It is also where a
    steward reading a spare code aloud sends somebody.
 
    Both are built from the address you have `/admin` open on, so open the
@@ -169,10 +171,12 @@ costs nothing, removes the question of whether anybody remembered to swap a sign
 on the wall, and makes a mismatch impossible: the slip and its QR come off the
 same page, so they always belong to the same event and to each other.
 
-Scanning is not the only way in. The code is printed under the QR, the entry
-screen is still there, and the shared event QR on the wall leads to it. A phone
-whose camera will not focus in a dark room is a certainty at some point in the
-evening, and it should cost that person thirty seconds rather than their ballot.
+Scanning your own slip is not the only way in. The code is printed under the QR
+and the shared event QR leads to the screen where it is typed — which is why
+that shared code is worth putting on the wall even though nobody's ballot needs
+it. A phone whose camera will not focus in a dark room is a certainty at some
+point in the evening, and it should cost that person thirty seconds rather than
+their ballot.
 
 `/` with no event id still resolves to something sensible for anyone who types
 the bare address: the live event if one is running, otherwise the one being set

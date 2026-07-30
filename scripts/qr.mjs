@@ -103,7 +103,7 @@ ${slips
     (slip) => `  <div class="slip">
     ${slip.svg}
     <div class="code">${slip.code}</div>
-    <div class="hint">Scan to score the demos. If scanning fails, type this code.</div>
+    <div class="hint">Scan to score the demos. If this will not scan, scan the event QR on display and type the code above.</div>
   </div>`,
   )
   .join('\n')}
