@@ -9,7 +9,10 @@ export const events = sqliteTable('events', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
 
-  // draft    — being set up, codes can be generated, nobody can vote
+  // draft    — being set up, codes can be generated, nobody can vote. Not a
+  //            private state: attendees are handed slips and open their page
+  //            during it, and their phones watch this column so that opening
+  //            takes them to the ballot without a refresh (app/voteWatch.ts).
   // open     — voting window is live
   // closed   — window ended, organiser can still see the tally
   // revealed — results are readable on the big screen without an admin cookie

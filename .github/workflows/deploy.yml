@@ -1,6 +1,14 @@
-name: Deploy Demo Vote
+# Validates every pull request, and deploys only from main.
+#
+# One workflow rather than two on purpose: the checks a change has to pass
+# before it is merged and the checks it has to pass before it is deployed are
+# the same checks, and splitting them into separate files is how those two lists
+# drift apart. `validate` is the gate in both directions; `deploy` is the part
+# that only main is allowed to reach.
+name: Demo Vote
 
 on:
+  pull_request:
   push:
     branches:
       - main
@@ -9,9 +17,13 @@ on:
 permissions:
   contents: read
 
+# Scoped to the ref so a pull request run and a production deploy are never in
+# the same queue. Superseded pull request runs are cancelled — pushing a fixup
+# makes the run under it worthless. Runs on main are not: see the deploy job,
+# which must finish whatever it started.
 concurrency:
-  group: demo-vote-production
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   D1_DATABASE_NAME: demo-vote-db
@@ -47,9 +59,22 @@ jobs:
   deploy:
     name: Deploy production
     needs: validate
+    # The line that makes it safe for this workflow to run on pull requests at
+    # all. Everything below applies migrations to the production database and
+    # publishes the Worker, so it has to be unreachable from a branch that
+    # anybody can open a pull request from.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
+
+    # Kept on the job rather than the workflow now that pull requests share the
+    # file. Two deploys must never overlap — a half-applied migration behind a
+    # newer Worker is the one state this app cannot be talked out of — and
+    # nothing in flight is ever cancelled, however many pushes land on top.
+    concurrency:
+      group: demo-vote-production
+      cancel-in-progress: false
 
     steps:
       - name: Check out repository
