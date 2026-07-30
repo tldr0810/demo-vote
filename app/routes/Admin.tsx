@@ -455,9 +455,11 @@ function EventPanel({
           <VoteQr url={voteUrl} />
           <div className="hint">
             {/* window.location.origin, so opening /admin on localhost encodes a
-                localhost URL that no phone can reach. */}
-            Encodes the address you are viewing this page on. Open the dashboard from the address
-            attendees will use before printing this.
+                localhost URL that no phone can reach. The print sheet builds its
+                slips from the same origin, so this caveat covers both. */}
+            The shared code for the wall or the running order: it carries no voting code, so it
+            lands on the entry screen. Encodes the address you are viewing this page on — open the
+            dashboard from the address attendees will use before printing anything.
           </div>
         </div>
 
@@ -536,8 +538,9 @@ function EventPanel({
       <div className="panel">
         <h2>Voting codes</h2>
         <p>
-          Hand one slip to each person at check-in. Codes are 8 characters and never contain I,
-          L, O, U, 0 or 1.
+          One code per person. Print the QR sheet and hand a slip to each person at check-in —
+          scanning it opens their ballot with nothing to type. The code is printed underneath as
+          the fallback, and is 8 characters that never contain I, L, O, U, 0 or 1.
         </p>
         <div className="row">
           <input
@@ -563,6 +566,12 @@ function EventPanel({
           >
             Generate {count}
           </button>
+          {/* A full page load rather than a router push, deliberately: the print
+              sheet renders a QR per code and the organiser prints it, closes it
+              and comes back. There is no state worth carrying across. */}
+          <a className="btn" href={`/admin/print/${event.id}`}>
+            Print QR slips
+          </a>
           <a className="btn btn--ghost" href={`/api/admin/event/${event.id}/codes.csv`}>
             Download all as CSV
           </a>

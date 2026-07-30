@@ -8,6 +8,7 @@ dist/
 # Generated artefacts: code batches and the QR code from `npm run qr`.
 codes-*.csv
 vote-qr.svg
+vote-slips.html
 
 # worker-configuration.d.ts is deliberately NOT ignored. tsconfig includes it
 # and `npm run check` typechecks against it, so a fresh clone needs it present.

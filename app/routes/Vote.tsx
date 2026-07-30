@@ -5,6 +5,7 @@ import { DemoCard } from '../components/DemoCard'
 import { ResultsBars } from '../components/ResultsBars'
 import { messageFor } from '../messages'
 import { gsap, motionOk, useGSAP } from '../motion'
+import { codeFromSearch, stripCodeFromUrl } from '../voteUrl'
 
 type Phase = 'loading' | 'entry' | 'ballot' | 'unavailable' | 'results'
 
@@ -116,18 +117,63 @@ export function Vote({ eventId }: { eventId: string | null }) {
       )
       if (cancelled) return
 
+      // An existing session wins over a scanned code, and is checked first on
+      // purpose. Someone re-scanning their own slip mid-ballot should land back
+      // on the ballot rather than spend a request redeeming a code the cookie
+      // already speaks for. A session for a *different* event answers 401 here,
+      // so the scanned code still gets its turn below — which is what makes a
+      // second event's QR work for somebody still holding the first one's.
       if (ballotResult.ok) {
+        stripCodeFromUrl()
         applyBallot(ballotResult.data)
         return
       }
-      setPhase(eventResult.data.votingLive ? 'entry' : 'unavailable')
+
+      if (!eventResult.data.votingLive) {
+        setPhase('unavailable')
+        return
+      }
+
+      // Scanned a personal QR code: redeem it and go straight to the ballot,
+      // with no typing at all. The manual entry screen stays as the fallback,
+      // because a scanner that mangles the query string, a slip that failed to
+      // print, and a code read aloud by a steward all end up there.
+      const scanned = codeFromSearch(window.location.search)
+      if (scanned) {
+        const redeemed = await api.post('/api/session', {
+          eventId: eventResult.data.id,
+          code: scanned,
+        })
+        if (cancelled) return
+
+        // Cleared whether or not it worked. A code that failed will fail again
+        // on every reload, and leaving it in the address bar turns one bad slip
+        // into a page that cannot be recovered by refreshing.
+        stripCodeFromUrl()
+
+        if (redeemed.ok) {
+          const scannedBallot = await loadBallot(eventResult.data.id)
+          if (cancelled) return
+          if (scannedBallot.ok) return
+          setError(messageFor(scannedBallot.error))
+        } else {
+          setError(messageFor(redeemed.error))
+        }
+        // Redemption failed, or the ballot behind it did. Either way the code
+        // entry screen is where somebody can do something about it, and the
+        // error above says what went wrong.
+        setPhase('entry')
+        return
+      }
+
+      setPhase('entry')
     }
 
     void boot()
     return () => {
       cancelled = true
     }
-  }, [eventId, applyBallot])
+  }, [eventId, applyBallot, loadBallot])
 
   const currentEventId = event?.id ?? null
   const demoCount = ballot?.demos.length ?? 0
@@ -426,8 +472,8 @@ export function Vote({ eventId }: { eventId: string | null }) {
 
           <h1 data-anim="entry">Enter your voting code</h1>
           <p data-anim="entry">
-            Your code is on the slip you were given at check-in. {CODE_LENGTH} characters, good for
-            one ballot.
+            Your code is on the slip you were given at check-in — {CODE_LENGTH} characters, good
+            for one ballot. Scanning the QR code on the slip skips this step.
           </p>
 
           <div className="field" data-anim="entry" ref={entryCardRef}>

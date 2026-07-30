@@ -1,8 +1,9 @@
 # Demo Vote 🗳️
 
-Live audience scoring for demo days and pitch sessions. Attendees scan a QR code,
-redeem the code printed on their check-in slip, and give every demo a score from
-1 to 5, adjusting as often as they like until voting closes. Organisers watch a
+Live audience scoring for demo days and pitch sessions. Attendees scan the QR
+code on their check-in slip, land straight on the ballot with nothing to type,
+and give every demo a score from 1 to 5, adjusting as often as they like until
+voting closes. Organisers watch a
 live tally, then reveal the standings on the projector and on every phone in the
 room at the same time. Runs on Cloudflare Workers with D1.
 
@@ -60,19 +61,30 @@ are done".
 
 1. **Beforehand.** Open `/admin`, create the event, enter the demo line-up, set
    the voting window (60 minutes by default).
-2. **Generate codes.** Enter how many you need and generate, or download the CSV
-   to print from. Codes are 8 characters from an alphabet that deliberately
-   omits `I L O U 0 1`, so nothing on a printed slip can be misread.
+2. **Generate codes.** Enter how many you need and generate. Codes are 8
+   characters from an alphabet that deliberately omits `I L O U 0 1`, so nothing
+   on a printed slip can be misread.
 
    The rate limit on redemption is sized for a room rather than for a person:
    venue wifi puts every phone behind one NAT address, so the whole audience
    shares one limiter key. What makes guessing hopeless is the 6.6e11-wide
    keyspace, not the limit. See the arithmetic in `wrangler.toml`.
-3. **Make the QR code.** `/admin` renders the QR for the event you are setting up
-   and offers it as an SVG download. It encodes `/v/<eventId>`, so it belongs to
-   that event and to nothing else. Put it on the slips, the running order or a
-   slide.
-4. **Check-in.** One slip per person.
+3. **Print the slips.** "Print QR slips" opens `/admin/print/<eventId>`: one slip
+   per code, each with its own QR encoding `/v/<eventId>?c=<code>`, ready to cut
+   up. Scanning one opens that person's ballot with nothing to type. The code is
+   printed underneath as the fallback for a camera that will not focus.
+
+   `/admin` also shows a single QR for the event with no code in it, for the wall
+   or the running order. That one lands on the entry screen, which is where a
+   steward reading a spare code aloud sends somebody.
+
+   Both are built from the address you have `/admin` open on, so open the
+   dashboard on the address attendees will use before printing anything.
+4. **Check-in.** One slip per person. Hand them out individually rather than
+   putting the sheet where it can be photographed: a slip is one ballot, and a
+   photograph of thirty slips is thirty of them. (Nothing can be stuffed with a
+   stolen code — scores overwrite rather than accumulate — but somebody else's
+   ballot can be overwritten.)
 5. **After the demos.** Press "Open voting". The countdown starts at that moment.
 6. **While voting.** The dashboard refreshes every two seconds and shows codes
    issued, redeemed, and how many ballots have a score for every demo. The gap
@@ -124,12 +136,24 @@ That prints a scannable QR block in your terminal pointing at
 `http://<your-lan-ip>:5273/`, which resolves to whichever event is currently
 open. Scan it, redeem a code from `/admin`, and walk the real path end to end.
 
+To rehearse the path attendees actually take, open `/admin/print/<eventId>` from
+the LAN address and scan a slip off the screen. Passing the code CSV to the
+script builds the same sheet as a standalone file:
+
+```bash
+npm run qr -- http://<your-lan-ip>:5273/v/<eventId> codes-<eventId>.csv
+```
+
+That exists for the case the dashboard cannot cover — a venue with no network, a
+laptop that is not the one signed into `/admin`, a print shop that wants a file
+rather than a login. Otherwise use the page, which has a print dialogue attached.
+
 ## Running it again, and again
 
 The tool is built to be reused. Create a new event for each session; the old
 ones stay in the dropdown with their results intact.
 
-**Each event gets its own QR code.** The one `/admin` renders encodes
+**Each event gets its own QR codes.** Every one of them encodes
 `/v/<eventId>`, so a scan can only ever land on the event it was made for. There
 is no precedence to reason about and nothing to get wrong. It also means two
 events can run at once, which is the only way a multi-track day works: a session
@@ -139,11 +163,16 @@ another is refused rather than answered. Both halves matter, and
 session for one event who scans the other's QR is handed their existing receipt
 and can never reach the ballot in front of them.
 
-The neatest place for that QR is the printed slip itself. Codes are reprinted for
-every event anyway, so putting the QR on the same sheet costs nothing, removes
-the question of whether anybody remembered to swap a sign on the wall, and makes
-a mismatch impossible: the slip and the QR come off the same page, so they always
-belong to the same event.
+The QR lives on the printed slip itself, one per attendee, carrying that
+person's code in the URL. Codes are reprinted for every event anyway, so this
+costs nothing, removes the question of whether anybody remembered to swap a sign
+on the wall, and makes a mismatch impossible: the slip and its QR come off the
+same page, so they always belong to the same event and to each other.
+
+Scanning is not the only way in. The code is printed under the QR, the entry
+screen is still there, and the shared event QR on the wall leads to it. A phone
+whose camera will not focus in a dark room is a certainty at some point in the
+evening, and it should cost that person thirty seconds rather than their ballot.
 
 `/` with no event id still resolves to something sensible for anyone who types
 the bare address: the live event if one is running, otherwise the one being set
@@ -173,9 +202,9 @@ a room is being told to scan for it is exactly the failure that rule prevents.
 The cycle each time:
 
 1. `/admin` → **New event** → name it, enter the line-up, set the window
-2. Generate codes, download the CSV and the QR, print the slips
+2. Generate codes, print the QR slips, cut them up
 3. Run the event (open, score, close, reveal)
-4. Leave it. The next event starts at step 1 with a QR code of its own
+4. Leave it. The next event starts at step 1 with codes and QRs of its own
 
 ## Fork it for your own event
 
@@ -205,7 +234,8 @@ your own account.
 ## How it fits together
 
 ```
-scan QR ─▶ /v/:eventId ─▶ enter code ─▶ POST /api/session ─▶ signed cookie
+scan slip ─▶ /v/:eventId?c=CODE ─▶ POST /api/session ─▶ signed cookie
+   (or the shared QR ─▶ type the code)     code dropped from the URL
                                                                   │
             score each demo 1-5 ─▶ POST /api/score ─▶ upsert ────┤
                     (once per adjustment, saved as you go)        ▼
@@ -227,7 +257,9 @@ organiser ─▶ /admin ─▶ polls every 2s ─▶ ranked bars
 | `worker/codes.ts` | Code generator and alphabet |
 | `worker/data.ts` | D1 queries, including the upsert in `saveScore` |
 | `db/schema.ts` | Four tables: events, demos, codes, votes |
-| `app/` | React front end, five screens |
+| `app/voteUrl.ts` | How a code travels in a QR URL, and how it is read back |
+| `app/routes/PrintCodes.tsx` | The sheet of per-attendee QR slips |
+| `app/` | React front end, six screens |
 | `app/motion.ts` | GSAP setup and the reduced-motion check |
 
 ### Event states

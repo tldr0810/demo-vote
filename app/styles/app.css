@@ -879,3 +879,121 @@ p {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ------------------------------------------------------------ print sheet */
+
+/*
+ * /admin/print/<eventId> — the sheet of per-attendee slips.
+ *
+ * The only screen in this app designed for paper, so it opts out of the shell's
+ * max width and, below, out of the theme entirely: a slip has to be black on
+ * white whatever the organiser's laptop is set to, and a printer asked for the
+ * dark palette produces either a black page or nothing.
+ */
+.printpage {
+  padding: calc(var(--step) * 2);
+}
+
+.printbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--step) * 2);
+  flex-wrap: wrap;
+  padding: calc(var(--step) * 2);
+  margin-bottom: calc(var(--step) * 2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+}
+
+.slips {
+  display: grid;
+  /* Three across on A4 portrait with a sensible margin, and as many as fit on
+     a wider screen while the organiser is looking at it. */
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: calc(var(--step) * 1.5);
+}
+
+.slip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--step);
+  text-align: center;
+  padding: calc(var(--step) * 2);
+  /* Dashed, because this is a cut line before it is a border. */
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-input);
+  background: var(--surface);
+}
+
+.slip__event {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.slip__qr {
+  width: 150px;
+  height: 150px;
+  /* The QR is pinned black on white, so it needs its own white backing to sit
+     on when the surface around it is not. */
+  background: #ffffff;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.slip__code {
+  font-family: var(--mono);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.slip__hint {
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+@media print {
+  /* Forced light. The tokens follow the organiser's system theme, and a sheet
+     of slips printed out of the dark palette is a page of black rectangles.
+     Most browsers drop backgrounds when printing anyway, but "most" is not the
+     one in the venue. */
+  body {
+    background: #ffffff;
+    color: #000000;
+  }
+
+  .printpage {
+    padding: 0;
+    background: #ffffff;
+    color: #000000;
+  }
+
+  .printbar {
+    display: none;
+  }
+
+  .slips {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+  }
+
+  .slip {
+    background: #ffffff;
+    color: #000000;
+    border-color: #999999;
+    border-radius: 0;
+    /* A slip split across a page break is two useless halves. */
+    break-inside: avoid;
+  }
+
+  .slip__event,
+  .slip__hint {
+    color: #444444;
+  }
+}
