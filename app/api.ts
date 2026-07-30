@@ -59,8 +59,23 @@ export type Ballot = {
   votingLive: boolean
   closesAt: string | null
   secondsRemaining: number
-  hasVoted: boolean
+  minScore: number
+  maxScore: number
+  /** This voter's own scores, keyed by demo id. Never anybody else's. */
+  myScores: Record<string, number>
+  scored: number
+  /** True once every demo has a score, which is when the ballot starts counting. */
+  complete: boolean
   demos: BallotDemo[]
+}
+
+/** What POST /api/score answers: the score that landed, and the ballot's progress. */
+export type ScoreSaved = {
+  demoId: string
+  score: number
+  scored: number
+  total: number
+  complete: boolean
 }
 
 export type TallyRow = {
@@ -68,16 +83,23 @@ export type TallyRow = {
   slot: number
   name: string
   team: string
-  votes: number
+  /** Sum of the scores this demo received, over complete ballots only. */
+  score: number
+  /** The same figure out of 5, to one decimal place. */
+  average: number
 }
 
-export type CodeStats = { issued: number; activated: number; voted: number }
+export type CodeStats = { issued: number; activated: number; scored: number }
 
 export type AdminResults = {
   event: { id: string; name: string; status: EventStatus }
   votingLive: boolean
   secondsRemaining: number
   stats: CodeStats
+  /** Complete ballots — the denominator behind every number in the tally. */
+  ballots: number
+  /** Top of the scoring scale. Sent so no screen has to hard-code it. */
+  maxScore: number
   tally: TallyRow[]
 }
 

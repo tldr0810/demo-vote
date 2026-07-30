@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Admin } from './routes/Admin'
+import { PrintCodes } from './routes/PrintCodes'
 import { Screen } from './routes/Screen'
 import { Vote } from './routes/Vote'
 import { segmentAfter, usePathname } from './router'
@@ -8,6 +9,10 @@ import './styles/app.css'
 
 function App() {
   const pathname = usePathname()
+
+  // Before the /admin catch-all below, which would otherwise swallow it.
+  const printEventId = segmentAfter(pathname, '/admin/print/')
+  if (printEventId) return <PrintCodes eventId={printEventId} />
 
   if (pathname === '/admin' || pathname.startsWith('/admin/')) return <Admin />
 

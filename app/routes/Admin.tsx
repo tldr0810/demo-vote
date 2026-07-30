@@ -423,8 +423,12 @@ function EventPanel({
             <span className="label">Redeemed</span>
           </div>
           <div>
-            <RollingNumber className="stat__value" value={stats.voted} />
-            <span className="label">Voted</span>
+            {/* Complete ballots. The gap between this and Redeemed is the
+                people who started scoring and did not finish every demo, whose
+                ballots will not be counted — the one number an organiser can
+                still act on while the window is open. */}
+            <RollingNumber className="stat__value" value={stats.scored} />
+            <span className="label">Scored all</span>
           </div>
           {event.status === 'open' && results ? (
             <CountdownRing
@@ -451,9 +455,11 @@ function EventPanel({
           <VoteQr url={voteUrl} />
           <div className="hint">
             {/* window.location.origin, so opening /admin on localhost encodes a
-                localhost URL that no phone can reach. */}
-            Encodes the address you are viewing this page on. Open the dashboard from the address
-            attendees will use before printing this.
+                localhost URL that no phone can reach. The print sheet builds its
+                slips from the same origin, so this caveat covers both. */}
+            The shared code for the wall or the running order: it carries no voting code, so it
+            lands on the entry screen. Encodes the address you are viewing this page on — open the
+            dashboard from the address attendees will use before printing anything.
           </div>
         </div>
 
@@ -532,8 +538,10 @@ function EventPanel({
       <div className="panel">
         <h2>Voting codes</h2>
         <p>
-          Hand one slip to each person at check-in. Codes are 8 characters and never contain I,
-          L, O, U, 0 or 1.
+          One code per person. Print the QR sheet and hand a slip to each person at check-in —
+          scanning it opens their ballot with nothing to type. Print a few spares: the slip carries
+          its code in the QR only, so a slip that will not scan is replaced rather than typed in.
+          The codes themselves are in the CSV, for reading one out to somebody genuinely stuck.
         </p>
         <div className="row">
           <input
@@ -559,6 +567,12 @@ function EventPanel({
           >
             Generate {count}
           </button>
+          {/* A full page load rather than a router push, deliberately: the print
+              sheet renders a QR per code and the organiser prints it, closes it
+              and comes back. There is no state worth carrying across. */}
+          <a className="btn" href={`/admin/print/${event.id}`}>
+            Print QR slips
+          </a>
           <a className="btn btn--ghost" href={`/api/admin/event/${event.id}/codes.csv`}>
             Download all as CSV
           </a>
@@ -579,7 +593,21 @@ function EventPanel({
           {event.status === 'open' ? <span className="label">Updates every 2s</span> : null}
         </div>
         {results ? (
-          <ResultsBars tally={results.tally} revealed={event.status !== 'open'} />
+          <>
+            {/* Stated next to the numbers rather than left to be inferred:
+                partial ballots are excluded, so this is not the same as the
+                number of people who scanned in, and an organiser reading a
+                total needs to know how many ballots produced it. */}
+            <p className="hint">
+              {results.ballots} complete {results.ballots === 1 ? 'ballot' : 'ballots'} counted.
+              Ballots missing a score for any demo are not included.
+            </p>
+            <ResultsBars
+              tally={results.tally}
+              maxScore={results.maxScore}
+              revealed={event.status !== 'open'}
+            />
+          </>
         ) : (
           <p>Nothing to show yet.</p>
         )}

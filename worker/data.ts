@@ -146,86 +146,179 @@ export async function listCodes(db: Db, eventId: string) {
   return db.select().from(codes).where(eq(codes.eventId, eventId)).orderBy(asc(codes.code))
 }
 
-// ----------------------------------------------------------------- votes
+// ---------------------------------------------------------------- scores
 
-export type CastVoteResult = 'recorded' | 'duplicate'
+export const MIN_SCORE = 1
+export const MAX_SCORE = 5
+
+export function isValidScore(candidate: unknown): candidate is number {
+  return (
+    typeof candidate === 'number' &&
+    Number.isInteger(candidate) &&
+    candidate >= MIN_SCORE &&
+    candidate <= MAX_SCORE
+  )
+}
+
+export type SaveScoreResult = { scored: number; total: number; complete: boolean }
 
 /**
- * Records one ballot.
+ * Writes one demo's score for one ballot, and reports how far along that ballot
+ * now is.
  *
- * The INSERT and the codes.usedAt stamp go through `db.batch`, which D1 runs as
- * a single transaction: if the UNIQUE index on votes.code rejects the insert,
- * the stamp rolls back with it and the row cannot end up marked used without a
- * matching vote.
+ * An UPSERT rather than an INSERT, because a score is revisable: the voter can
+ * drag it up and down until the organiser closes voting, and every one of those
+ * changes lands here. UNIQUE(code, demo_id) is what turns the second write into
+ * an update instead of a second row, which also means a double-tapped button
+ * cannot score the same demo twice.
  *
- * There is no "check whether this code already voted" step on purpose. Any such
- * check is a read followed by a write, and two concurrent requests can both
- * pass the read. The constraint is what decides, and losing that race returns
- * 'duplicate' rather than throwing.
+ * The codes.usedAt stamp that follows is deliberately not in a transaction with
+ * the write. It is only a dashboard counter, and what decides whether this
+ * ballot counts towards the tally is recomputed in getTally from the votes rows
+ * themselves — so a stamp that fails to land costs the organiser one number on a
+ * screen that refreshes every two seconds, and costs the voter nothing.
  */
-export async function castVote(
+export async function saveScore(
   db: Db,
-  input: { eventId: string; demoId: string; code: string },
-): Promise<CastVoteResult> {
+  input: { eventId: string; demoId: string; code: string; score: number },
+  demoCount: number,
+): Promise<SaveScoreResult> {
   const at = nowIso()
-  try {
-    await db.batch([
-      db.insert(votes).values({ ...input, createdAt: at }),
-      db.update(codes).set({ usedAt: at }).where(eq(codes.code, input.code)),
-    ])
-    return 'recorded'
-  } catch (error) {
-    if (isUniqueViolationMessage(error)) return 'duplicate'
-    throw error
-  }
+
+  await db
+    .insert(votes)
+    .values({ ...input, createdAt: at, updatedAt: at })
+    .onConflictDoUpdate({
+      target: [votes.code, votes.demoId],
+      set: { score: input.score, updatedAt: at },
+    })
+
+  const scored = await countScored(db, input.code)
+  const complete = scored >= demoCount
+
+  // Stamped every time the ballot is complete, not only the first: the value is
+  // read as "when this person last touched a finished ballot", which is the more
+  // useful of the two for an organiser watching the room.
+  await db
+    .update(codes)
+    .set({ usedAt: complete ? at : null })
+    .where(eq(codes.code, input.code))
+
+  return { scored, total: demoCount, complete }
 }
 
-/**
- * D1 surfaces constraint violations as an opaque Error whose message carries the
- * SQLite text. Losing a race on votes.code is expected behaviour, not a fault,
- * so it has to be distinguishable from a real database failure.
- */
-function isUniqueViolationMessage(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return message.includes('UNIQUE constraint failed')
+export async function countScored(db: Db, code: string): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(votes)
+    .where(eq(votes.code, code))
+  return Number(row?.n ?? 0)
 }
 
-export async function hasVoted(db: Db, code: string): Promise<boolean> {
-  const [row] = await db.select({ id: votes.id }).from(votes).where(eq(votes.code, code)).limit(1)
-  return row !== undefined
+/** This ballot's own scores, keyed by demo. Never anybody else's. */
+export async function getScores(db: Db, code: string): Promise<Record<string, number>> {
+  const rows = await db
+    .select({ demoId: votes.demoId, score: votes.score })
+    .from(votes)
+    .where(eq(votes.code, code))
+  return Object.fromEntries(rows.map((row) => [row.demoId, Number(row.score)]))
 }
+
+// ----------------------------------------------------------------- tally
 
 export type Tally = {
   demoId: string
   slot: number
   name: string
   team: string
-  votes: number
+  /** Sum of the scores this demo received, over complete ballots only. */
+  score: number
+  /** Average out of 5, to one decimal place. Zero when nothing counted yet. */
+  average: number
 }
 
+export type TallyResult = { rows: Tally[]; ballots: number }
+
 /**
- * Vote counts for every demo, including demos with zero votes. Sorted by count
- * desc, then slot asc so a tie renders in a stable order instead of shuffling
- * on each dashboard poll.
+ * The standings, counting only ballots that scored every demo.
+ *
+ * Partial ballots are stored — the voter's phone saves each score as they set
+ * it, so a half-finished ballot is the normal state of affairs for most of the
+ * voting window — but they must not be counted. Someone who scored two demos
+ * and put their phone away would otherwise hand those two an advantage over the
+ * four they never reached, which is the one way a sum can be unfair here.
+ *
+ * Because every counted ballot scored every demo, each demo has exactly the same
+ * number of raters, so ranking by sum and ranking by average give the same
+ * order. The sum is the headline and the average is the readable one; both are
+ * returned so no screen has to derive one from the other and get it wrong.
  */
-export async function getTally(db: Db, eventId: string): Promise<Tally[]> {
+export async function getTally(
+  db: Db,
+  eventId: string,
+  demoCount: number,
+): Promise<TallyResult> {
+  // Recomputed here rather than read from codes.usedAt. The stamp is written by
+  // the request that completed a ballot; this is derived from the rows
+  // themselves, so a tally can never be thrown off by a stamp that failed to
+  // land or by a demo roster that changed underneath one.
+  const completeBallots = sql`(
+    select ${votes.code} from ${votes}
+    where ${votes.eventId} = ${eventId}
+    group by ${votes.code}
+    having count(*) >= ${demoCount}
+  )`
+
   const rows = await db
     .select({
       demoId: demos.id,
       slot: demos.slot,
       name: demos.name,
       team: demos.team,
-      votes: sql<number>`count(${votes.id})`,
+      score: sql<number>`coalesce(sum(${votes.score}), 0)`,
+      raters: sql<number>`count(${votes.id})`,
     })
     .from(demos)
-    .leftJoin(votes, eq(votes.demoId, demos.id))
+    .leftJoin(
+      votes,
+      and(eq(votes.demoId, demos.id), sql`${votes.code} in ${completeBallots}`),
+    )
     .where(eq(demos.eventId, eventId))
     .groupBy(demos.id)
-    .orderBy(sql`count(${votes.id}) desc`, asc(demos.slot))
-  return rows.map((row) => ({ ...row, votes: Number(row.votes) }))
+    // Sorted by score desc then slot asc so a tie renders in a stable order
+    // instead of shuffling on each dashboard poll. That makes the order a total
+    // one, which is right for laying rows out and wrong for labelling them —
+    // see app/ranking.ts.
+    .orderBy(sql`coalesce(sum(${votes.score}), 0) desc`, asc(demos.slot))
+
+  // Identical across rows by construction, but taken as the max rather than
+  // from rows[0] so an event with no demos still answers zero.
+  const ballots = rows.reduce((most, row) => Math.max(most, Number(row.raters)), 0)
+
+  return {
+    ballots,
+    rows: rows.map((row) => {
+      const score = Number(row.score)
+      const raters = Number(row.raters)
+      return {
+        demoId: row.demoId,
+        slot: row.slot,
+        name: row.name,
+        team: row.team,
+        score,
+        average: raters > 0 ? Math.round((score / raters) * 10) / 10 : 0,
+      }
+    }),
+  }
 }
 
-export type CodeStats = { issued: number; activated: number; voted: number }
+/**
+ * `scored` counts complete ballots — codes carrying a score for every demo.
+ * The gap between `activated` and `scored` is the number of people who scanned
+ * in, started scoring, and did not finish, which is the one number an organiser
+ * can still act on while the window is open.
+ */
+export type CodeStats = { issued: number; activated: number; scored: number }
 
 /**
  * Demos and code counts for every event in two queries rather than two per
@@ -249,7 +342,7 @@ export async function getAllCodeStatsByEvent(db: Db): Promise<Map<string, CodeSt
       eventId: codes.eventId,
       issued: sql<number>`count(*)`,
       activated: sql<number>`sum(case when ${codes.activatedAt} is null then 0 else 1 end)`,
-      voted: sql<number>`sum(case when ${codes.usedAt} is null then 0 else 1 end)`,
+      scored: sql<number>`sum(case when ${codes.usedAt} is null then 0 else 1 end)`,
     })
     .from(codes)
     .groupBy(codes.eventId)
@@ -260,26 +353,26 @@ export async function getAllCodeStatsByEvent(db: Db): Promise<Map<string, CodeSt
       {
         issued: Number(row.issued ?? 0),
         activated: Number(row.activated ?? 0),
-        voted: Number(row.voted ?? 0),
+        scored: Number(row.scored ?? 0),
       },
     ]),
   )
 }
 
-export const EMPTY_CODE_STATS: CodeStats = { issued: 0, activated: 0, voted: 0 }
+export const EMPTY_CODE_STATS: CodeStats = { issued: 0, activated: 0, scored: 0 }
 
 export async function getCodeStats(db: Db, eventId: string): Promise<CodeStats> {
   const [row] = await db
     .select({
       issued: sql<number>`count(*)`,
       activated: sql<number>`sum(case when ${codes.activatedAt} is null then 0 else 1 end)`,
-      voted: sql<number>`sum(case when ${codes.usedAt} is null then 0 else 1 end)`,
+      scored: sql<number>`sum(case when ${codes.usedAt} is null then 0 else 1 end)`,
     })
     .from(codes)
     .where(eq(codes.eventId, eventId))
   return {
     issued: Number(row?.issued ?? 0),
     activated: Number(row?.activated ?? 0),
-    voted: Number(row?.voted ?? 0),
+    scored: Number(row?.scored ?? 0),
   }
 }

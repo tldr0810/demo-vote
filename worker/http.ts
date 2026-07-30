@@ -25,8 +25,7 @@ export type ApiErrorCode =
   | 'EVENT_NOT_FOUND'
   | 'VOTING_NOT_OPEN'
   | 'VOTING_CLOSED'
-  | 'CODE_ALREADY_USED'
-  | 'ALREADY_VOTED'
+  | 'BAD_SCORE' // outside 1-5, or not a whole number
   | 'NO_SESSION'
   | 'UNKNOWN_DEMO'
   | 'RATE_LIMITED'

@@ -190,7 +190,7 @@ describe('code batches', () => {
     }
   })
 
-  it('counts issued, activated and voted separately', async () => {
+  it('counts issued, activated and fully scored separately', async () => {
     const cookie = await login()
     const eventId = await createEvent(cookie)
     const { codes } = await (
@@ -207,7 +207,7 @@ describe('code batches', () => {
       body: JSON.stringify({ status: 'open' }),
     })
 
-    // Two people redeem; only one of them votes.
+    // Two people redeem; only one of them finishes a ballot.
     const cookies = await Promise.all(
       codes.slice(0, 2).map(async (code) => {
         const response = await api('/api/session', {
@@ -220,16 +220,27 @@ describe('code batches', () => {
     const demos = await (
       await api('/api/ballot', { cookie: cookies[0]! })
     ).json<{ demos: { id: string }[] }>()
-    await api('/api/vote', {
+    for (const demo of demos.demos) {
+      await api('/api/score', {
+        method: 'POST',
+        cookie: cookies[0]!,
+        body: JSON.stringify({ demoId: demo.id, score: 3 }),
+      })
+    }
+
+    // The second one starts and stops, which is what `scored` has to exclude:
+    // a ballot missing any demo is not counted anywhere.
+    await api('/api/score', {
       method: 'POST',
-      cookie: cookies[0]!,
-      body: JSON.stringify({ demoId: demos.demos[0]!.id }),
+      cookie: cookies[1]!,
+      body: JSON.stringify({ demoId: demos.demos[0]!.id, score: 5 }),
     })
 
     const results = await (
       await api(`/api/admin/event/${eventId}/results`, { cookie })
-    ).json<{ stats: { issued: number; activated: number; voted: number } }>()
-    expect(results.stats).toEqual({ issued: 5, activated: 2, voted: 1 })
+    ).json<{ stats: { issued: number; activated: number; scored: number }; ballots: number }>()
+    expect(results.stats).toEqual({ issued: 5, activated: 2, scored: 1 })
+    expect(results.ballots).toBe(1)
   })
 })
 
@@ -332,7 +343,7 @@ describe('status transitions', () => {
 })
 
 describe('the tally', () => {
-  it('includes demos with zero votes and sorts by count then slot', async () => {
+  it('includes demos nobody rated highly and sorts by total then slot', async () => {
     const cookie = await login()
     const eventId = await createEvent(cookie)
     const { codes } = await (
@@ -356,22 +367,26 @@ describe('the tally', () => {
     const ballot = await (
       await api('/api/ballot', { cookie: voterCookie })
     ).json<{ demos: { id: string; slot: number }[] }>()
-    // Vote for slot 3 so the winner is not also the first by slot order.
-    await api('/api/vote', {
-      method: 'POST',
-      cookie: voterCookie,
-      body: JSON.stringify({ demoId: ballot.demos[2]!.id }),
-    })
+    // Slot 3 gets the 5 so the winner is not also the first by slot order.
+    // Every demo is scored, because a ballot missing one would not count at all.
+    for (const [index, demo] of ballot.demos.entries()) {
+      await api('/api/score', {
+        method: 'POST',
+        cookie: voterCookie,
+        body: JSON.stringify({ demoId: demo.id, score: index === 2 ? 5 : 1 }),
+      })
+    }
 
     const results = await (
       await api(`/api/admin/event/${eventId}/results`, { cookie })
-    ).json<{ tally: { slot: number; votes: number }[] }>()
+    ).json<{ tally: { slot: number; score: number; average: number }[]; maxScore: number }>()
 
     expect(results.tally).toHaveLength(6)
-    expect(results.tally[0]).toMatchObject({ slot: 3, votes: 1 })
-    // Remaining five are all zero, ordered by slot.
+    expect(results.tally[0]).toMatchObject({ slot: 3, score: 5, average: 5 })
+    // Remaining five all scored 1, ordered by slot.
     expect(results.tally.slice(1).map((row) => row.slot)).toEqual([1, 2, 4, 5, 6])
-    expect(results.tally.slice(1).every((row) => row.votes === 0)).toBe(true)
+    expect(results.tally.slice(1).every((row) => row.score === 1)).toBe(true)
+    expect(results.maxScore).toBe(5)
   })
 })
 

@@ -1,4 +1,5 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { sql } from 'drizzle-orm'
 
 // Timestamps are ISO-8601 UTC strings. SQLite has no native date type and
 // string comparison on ISO-8601 is chronological, so window checks can happen
@@ -60,11 +61,16 @@ export const codes = sqliteTable(
       .references(() => events.id, { onDelete: 'cascade' }),
     batch: text('batch').notNull(),
 
-    // Set the first time the code is redeemed for a session. Never gates a
-    // vote — it only feeds the issued/activated/voted counters on the
+    // Set the first time the code is redeemed for a session. Never gates
+    // anything — it only feeds the issued/activated/scored counters on the
     // dashboard, so the organiser can see how many people took a slip but
-    // never voted.
+    // never scored.
     activatedAt: text('activated_at'),
+
+    // Set when this ballot last became complete — a score for every demo in the
+    // event. Also purely a dashboard counter: what makes a ballot count towards
+    // the tally is recomputed from the votes table itself (see getTally), never
+    // read from here. A stamp is allowed to be stale; a tally is not.
     usedAt: text('used_at'),
 
     createdAt: text('created_at').notNull(),
@@ -72,6 +78,14 @@ export const codes = sqliteTable(
   (table) => [index('codes_event_idx').on(table.eventId)],
 )
 
+/**
+ * One row per (code, demo): the score this ballot gives that demo.
+ *
+ * Six demos means six rows for one attendee, not one. Scores are revisable
+ * right up until the organiser closes voting, so a row is written by UPSERT
+ * rather than INSERT and the row count for a code only ever grows to the number
+ * of demos in the event.
+ */
 export const votes = sqliteTable(
   'votes',
   {
@@ -83,18 +97,27 @@ export const votes = sqliteTable(
       .notNull()
       .references(() => demos.id, { onDelete: 'cascade' }),
 
-    // This UNIQUE constraint is the entire anti-double-vote mechanism.
-    // Checking codes.usedAt before inserting is not enough: two concurrent
-    // requests can both read NULL and both proceed. The second INSERT has to
-    // be the thing that fails, and it does.
+    // UNIQUE(code, demo_id) — one score per demo per ballot. This is what the
+    // upsert in saveScore conflicts against, and it is what stops a phone that
+    // fires the same tap twice from writing two scores for one demo. Checking
+    // "has this code scored this demo?" first would not do it: two concurrent
+    // requests can both read nothing and both proceed.
     code: text('code')
       .notNull()
-      .unique()
       .references(() => codes.code, { onDelete: 'cascade' }),
 
+    // 1–5. The Worker validates before writing; this is the backstop for
+    // anything that reaches the database another way.
+    score: integer('score').notNull(),
+
     createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
   },
-  (table) => [index('votes_event_demo_idx').on(table.eventId, table.demoId)],
+  (table) => [
+    uniqueIndex('votes_code_demo_unique').on(table.code, table.demoId),
+    index('votes_event_demo_idx').on(table.eventId, table.demoId),
+    check('votes_score_range', sql`${table.score} between 1 and 5`),
+  ],
 )
 
 // Only the two the Worker actually names. `codes` and `votes` rows are always
