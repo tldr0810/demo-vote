@@ -5,7 +5,13 @@ import { messageFor } from '../messages'
 import { gsap, motionOk, useGSAP } from '../motion'
 import { joinNames, leaders } from '../ranking'
 
-type Payload = { event: { name: string }; tally: TallyRow[] }
+type Payload = {
+  event: { name: string }
+  tally: TallyRow[]
+  /** Complete ballots — the denominator behind every number on this screen. */
+  ballots: number
+  maxScore: number
+}
 
 /**
  * When the standings rows start fading in: 0.6s of heading, then a held beat.
@@ -133,14 +139,16 @@ export function Screen({ eventId }: { eventId: string }) {
     )
   }
 
-  const totalVotes = payload.tally.reduce((sum, row) => sum + row.votes, 0)
-
   return (
     <div className="screen" ref={rootRef}>
       <div className="eyebrow" data-anim="screen-head">
         <span className="label">{payload.event.name}</span>
+        {/* Ballots, not scores. The sum of every score in the room is a large
+            number that means nothing to anybody looking at it; the number of
+            people whose ballots counted is the figure that tells the room how
+            much weight the standings carry. */}
         <span className="label">
-          {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'}
+          {payload.ballots} {payload.ballots === 1 ? 'ballot' : 'ballots'}
         </span>
       </div>
 
@@ -154,12 +162,17 @@ export function Screen({ eventId }: { eventId: string }) {
       ) : null}
 
       <h1 data-anim="winner">
-        {winners.length > 0 ? joinNames(winners.map((row) => row.name)) : 'No votes were cast'}
+        {winners.length > 0 ? joinNames(winners.map((row) => row.name)) : 'No ballots were counted'}
       </h1>
 
       {/* Starts growing a fraction after the rows begin arriving, so the first
           thing the room sees in a row is an empty track, and then it fills. */}
-      <ResultsBars tally={payload.tally} revealed fillDelay={ROWS_IN_AT + 0.15} />
+      <ResultsBars
+        tally={payload.tally}
+        maxScore={payload.maxScore}
+        revealed
+        fillDelay={ROWS_IN_AT + 0.15}
+      />
     </div>
   )
 }

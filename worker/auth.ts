@@ -1,10 +1,11 @@
 // Stateless HMAC-signed session cookies for both voters and organisers.
 //
 // Nothing here is stored server-side. A voter session says "this browser
-// redeemed code X for event Y until time Z" and the vote endpoint re-checks
+// redeemed code X for event Y until time Z" and the score endpoint re-checks
 // every one of those claims against D1 before writing, so a forged or replayed
-// cookie cannot produce a second vote — the UNIQUE constraint on votes.code is
-// still the last line of defence.
+// cookie cannot inflate a demo's total — UNIQUE(code, demo_id) is still the last
+// line of defence, and it makes a replayed write an overwrite rather than a
+// second row.
 
 export const VOTER_COOKIE = 'dv_voter'
 export const ADMIN_COOKIE = 'dv_admin'

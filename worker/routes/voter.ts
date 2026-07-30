@@ -9,15 +9,18 @@ import {
 } from '../auth'
 import { isValidCodeFormat, normalizeCode } from '../codes'
 import {
-  castVote,
+  MAX_SCORE,
+  MIN_SCORE,
   getCode,
   getCurrentEvent,
   getDb,
   getEvent,
-  hasVoted,
+  getScores,
+  isValidScore,
   isVotingLive,
   listDemos,
   markActivated,
+  saveScore,
   secondsRemaining,
 } from '../data'
 import { clientIp, fail, json, readJson } from '../http'
@@ -55,11 +58,15 @@ export async function getPublicEvent(
 }
 
 /**
- * POST /api/session — redeem a printed code for a voting session.
+ * POST /api/session — redeem a printed code for a scoring session.
  *
- * Redeeming is idempotent while the code is unused: someone who closes the tab
- * can re-enter the same code and get a fresh cookie. It stops working the
- * moment a vote is recorded.
+ * Redeeming stays available for the whole voting window, however far along the
+ * ballot is. It used to be refused once the code had voted, which made sense
+ * when a vote was a single irreversible act; now that scores can be revised
+ * until the organiser closes voting, that rule would strand anyone whose phone
+ * dropped the cookie — they would be locked out of a ballot they are still
+ * entitled to change. Nothing is spent by redeeming twice: the code addresses
+ * one set of scores, and a second session overwrites rather than adds.
  */
 export async function postSession(request: Request, env: Env): Promise<Response> {
   const secret = env.VOTE_HMAC_KEY
@@ -84,7 +91,6 @@ export async function postSession(request: Request, env: Env): Promise<Response>
 
   const row = await getCode(db, code, event.id)
   if (!row) return fail('INVALID_CODE', 401)
-  if (row.usedAt) return fail('CODE_ALREADY_USED', 409)
 
   await markActivated(db, code)
 
@@ -133,14 +139,23 @@ export async function getBallot(request: Request, env: Env): Promise<Response> {
   const event = await getEvent(db, session.e)
   if (!event) return fail('EVENT_NOT_FOUND', 404)
 
-  const [demos, voted] = await Promise.all([listDemos(db, event.id), hasVoted(db, session.c)])
+  const [demos, myScores] = await Promise.all([listDemos(db, event.id), getScores(db, session.c)])
+  const scored = Object.keys(myScores).length
 
   return json({
     event: { id: event.id, name: event.name, status: event.status },
     votingLive: isVotingLive(event),
     closesAt: event.closesAt,
     secondsRemaining: secondsRemaining(event),
-    hasVoted: voted,
+    minScore: MIN_SCORE,
+    maxScore: MAX_SCORE,
+    // This voter's own scores, so a phone that reloads mid-ballot comes back
+    // showing what they already set rather than an empty one.
+    myScores,
+    scored,
+    // A ballot only counts once every demo has a score, so the phone needs to
+    // know both halves of that fraction to say so.
+    complete: scored >= demos.length,
     demos: demos.map((demo) => ({
       id: demo.id,
       slot: demo.slot,
@@ -151,8 +166,16 @@ export async function getBallot(request: Request, env: Env): Promise<Response> {
   })
 }
 
-/** POST /api/vote — cast the one ballot this code is entitled to. */
-export async function postVote(request: Request, env: Env): Promise<Response> {
+/**
+ * POST /api/score — set this ballot's score for one demo.
+ *
+ * Called once per adjustment rather than once per ballot: the phone saves each
+ * score as the voter sets it, and sends the same demo again whenever they change
+ * their mind. Writing is therefore idempotent by design, and the response
+ * carries the ballot's progress so the phone can show how many demos are left
+ * without asking a second question.
+ */
+export async function postScore(request: Request, env: Env): Promise<Response> {
   const secret = env.VOTE_HMAC_KEY
   if (!secret) return fail('NOT_CONFIGURED', 503)
 
@@ -160,27 +183,34 @@ export async function postVote(request: Request, env: Env): Promise<Response> {
   if (!session) return fail('NO_SESSION', 401)
 
   // Keyed on the code rather than the address it arrived from: the whole room is
-  // behind one venue IP, and one code is entitled to one vote. See wrangler.toml.
+  // behind one venue IP. See wrangler.toml — the ceiling is sized for a person
+  // changing their mind, not for a person voting once.
   const allowed = await env.VOTE_RATE_LIMITER.limit({ key: session.c })
   if (!allowed.success) return fail('RATE_LIMITED', 429)
 
-  const body = await readJson<{ demoId?: string }>(request)
+  const body = await readJson<{ demoId?: string; score?: number }>(request)
   if (!body?.demoId) return fail('BAD_REQUEST', 400)
+  if (!isValidScore(body.score)) return fail('BAD_SCORE', 400)
 
   const db = getDb(env)
   const event = await getEvent(db, session.e)
   if (!event) return fail('EVENT_NOT_FOUND', 404)
   // Re-checked here rather than trusted from the cookie: the organiser may have
-  // closed voting early, after this session was issued.
+  // closed voting early, after this session was issued. This is also the line
+  // that makes scores final — up to it they are revisable, past it they are not.
   if (!isVotingLive(event)) return fail('VOTING_CLOSED', 409)
 
   const demos = await listDemos(db, event.id)
   const demo = demos.find((candidate) => candidate.id === body.demoId)
   if (!demo) return fail('UNKNOWN_DEMO', 400)
 
-  const result = await castVote(db, { eventId: event.id, demoId: demo.id, code: session.c })
-  if (result === 'duplicate') return fail('ALREADY_VOTED', 409)
+  const progress = await saveScore(
+    db,
+    { eventId: event.id, demoId: demo.id, code: session.c, score: body.score },
+    demos.length,
+  )
 
-  // Confirms the choice back to the voter and nothing else — still no counts.
-  return json({ ok: true, demoId: demo.id, demoName: demo.name })
+  // The voter's own score and their own progress. Still nothing about anybody
+  // else's ballot, and still no tally.
+  return json({ ok: true, demoId: demo.id, score: body.score, ...progress })
 }

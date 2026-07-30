@@ -423,8 +423,12 @@ function EventPanel({
             <span className="label">Redeemed</span>
           </div>
           <div>
-            <RollingNumber className="stat__value" value={stats.voted} />
-            <span className="label">Voted</span>
+            {/* Complete ballots. The gap between this and Redeemed is the
+                people who started scoring and did not finish every demo, whose
+                ballots will not be counted — the one number an organiser can
+                still act on while the window is open. */}
+            <RollingNumber className="stat__value" value={stats.scored} />
+            <span className="label">Scored all</span>
           </div>
           {event.status === 'open' && results ? (
             <CountdownRing
@@ -579,7 +583,21 @@ function EventPanel({
           {event.status === 'open' ? <span className="label">Updates every 2s</span> : null}
         </div>
         {results ? (
-          <ResultsBars tally={results.tally} revealed={event.status !== 'open'} />
+          <>
+            {/* Stated next to the numbers rather than left to be inferred:
+                partial ballots are excluded, so this is not the same as the
+                number of people who scanned in, and an organiser reading a
+                total needs to know how many ballots produced it. */}
+            <p className="hint">
+              {results.ballots} complete {results.ballots === 1 ? 'ballot' : 'ballots'} counted.
+              Ballots missing a score for any demo are not included.
+            </p>
+            <ResultsBars
+              tally={results.tally}
+              maxScore={results.maxScore}
+              revealed={event.status !== 'open'}
+            />
+          </>
         ) : (
           <p>Nothing to show yet.</p>
         )}

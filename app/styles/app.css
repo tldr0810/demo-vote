@@ -440,10 +440,9 @@ p {
 }
 
 .demo {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: calc(var(--step) * 2);
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 1.75);
   width: 100%;
   text-align: left;
   background: var(--surface);
@@ -451,19 +450,14 @@ p {
   border-radius: var(--radius-surface);
   padding: calc(var(--step) * 2);
   color: inherit;
-  font-family: inherit;
-  font-size: inherit;
-  cursor: pointer;
-  transition: border-color 140ms ease, background 140ms ease, transform 120ms ease;
+  transition: border-color 140ms ease, background 140ms ease;
 }
 
-/* The one press that matters in this whole app, and it was the only button
-   without a pressed state. A phone has no hover to confirm the target first, so
-   between the finger landing and React re-rendering the card there was nothing
-   at all. Smaller travel than .btn: these cards are large, and a large surface
-   moving as far as a pill reads as the layout slipping. */
-.demo:active {
-  transform: scale(0.985);
+.demo__head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: calc(var(--step) * 2);
+  align-items: center;
 }
 
 .demo__slot {
@@ -487,18 +481,87 @@ p {
   color: var(--text-muted);
 }
 
-.demo[aria-pressed='true'] {
-  border-color: var(--accent);
+.demo[data-scored='true'] {
+  border-color: var(--line-strong);
   background: var(--surface-raised);
 }
 
-.demo[aria-pressed='true'] .demo__slot {
+.demo[data-scored='true'] .demo__slot {
   color: var(--accent);
 }
 
-/* Dimming the alternatives is what makes the choice feel committed. */
-.ballot[data-has-selection='true'] .demo[aria-pressed='false'] {
-  opacity: 0.42;
+/* ----------------------------------------------------------------- rating */
+
+.rating {
+  display: flex;
+  align-items: center;
+  gap: var(--step);
+}
+
+.rating__option {
+  flex: 1;
+  /* Comfortably past the 44px touch target floor. Five of these sit side by
+     side on a phone, which is the narrowest any target in this app gets, and
+     they are pressed repeatedly by someone who is also watching a stage. */
+  min-height: 3rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-input);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease,
+    transform 120ms ease;
+}
+
+/* A phone has no hover to confirm the target first, so without this there is
+   nothing at all between the finger landing and React re-rendering. */
+.rating__option:active {
+  transform: scale(0.94);
+}
+
+.rating__option[aria-checked='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* Reserves its width whether or not it has anything to say, so a row does not
+   reflow every time a score saves. */
+.rating__state {
+  flex: 0 0 3.25rem;
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* ------------------------------------------------------------ ballot status */
+
+/* Autosave means every card says "Saved" the moment it is scored, which on its
+   own reads as "you are done". A ballot missing one score is not counted at
+   all, so this line carries the fraction and what it means for the whole time
+   the ballot is open, not only at the end. */
+.ballotstatus {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius-input);
+  background: var(--surface);
+  padding: calc(var(--step) * 1.5) calc(var(--step) * 2);
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.ballotstatus[data-complete='true'] {
+  border-left-color: var(--accent);
+}
+
+.ballotstatus strong {
+  color: var(--text);
 }
 
 /* --------------------------------------------------------------- countdown */
@@ -548,41 +611,6 @@ p {
 .countdown[data-tone='urgent'] .countdown__value { color: var(--danger); }
 
 /* ------------------------------------------------------------- confirm bar */
-
-.confirmbar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: calc(var(--step) * 2) calc(var(--step) * 2.5)
-    calc(var(--step) * 2 + env(safe-area-inset-bottom));
-  background: var(--surface-raised);
-  border-top: 1px solid var(--line-strong);
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--step) * 1.5);
-  z-index: 10;
-}
-
-/* Set while the bar is playing its exit, which is the one window where it is on
-   screen but no longer represents a live selection. */
-.confirmbar[data-closing='true'] {
-  pointer-events: none;
-}
-
-.confirmbar__inner {
-  max-width: var(--shell);
-  margin: 0 auto;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--step) * 1.5);
-}
-
-.confirmbar__warning {
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-}
 
 /* --------------------------------------------------------------- receipt */
 

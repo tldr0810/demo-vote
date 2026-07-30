@@ -92,11 +92,34 @@ async function redeem(eventId: string, code: string): Promise<string> {
   return cookieFrom(response, 'dv_voter')
 }
 
-async function countVotes(eventId: string): Promise<number> {
+function score(cookie: string, demoId: string, value: number): Promise<Response> {
+  return api('/api/score', {
+    method: 'POST',
+    cookie,
+    body: JSON.stringify({ demoId, score: value }),
+  })
+}
+
+/** Fills in a whole ballot, which is what makes it count towards the tally. */
+async function scoreAll(cookie: string, demoIds: string[], value = 3): Promise<void> {
+  for (const demoId of demoIds) {
+    const response = await score(cookie, demoId, value)
+    expect(response.status).toBe(200)
+  }
+}
+
+async function countScores(eventId: string): Promise<number> {
   const row = await env.DB.prepare('SELECT count(*) AS n FROM votes WHERE event_id = ?')
     .bind(eventId)
     .first<{ n: number }>()
   return Number(row?.n ?? 0)
+}
+
+async function storedScore(code: string, demoId: string): Promise<number | null> {
+  const row = await env.DB.prepare('SELECT score FROM votes WHERE code = ? AND demo_id = ?')
+    .bind(code, demoId)
+    .first<{ score: number }>()
+  return row ? Number(row.score) : null
 }
 
 beforeEach(async () => {
@@ -110,84 +133,83 @@ beforeEach(async () => {
 
 // ---------------------------------------------------------------------------
 
-describe('one code, one vote', () => {
-  it('records a single vote and rejects the second attempt', async () => {
+describe('scoring a ballot', () => {
+  it('records one score per demo and reports progress as it goes', async () => {
     const { eventId, demoIds, codes } = await seed()
     const cookie = await redeem(eventId, codes[0]!)
 
-    const first = await api('/api/vote', {
+    const first = await score(cookie, demoIds[0]!, 4)
+    expect(first.status).toBe(200)
+    expect(await first.json()).toMatchObject({
+      demoId: demoIds[0],
+      score: 4,
+      scored: 1,
+      total: 6,
+      complete: false,
+    })
+
+    for (const demoId of demoIds.slice(1)) await score(cookie, demoId, 2)
+
+    const last = await score(cookie, demoIds[5]!, 5)
+    expect(await last.json()).toMatchObject({ scored: 6, total: 6, complete: true })
+    expect(await countScores(eventId)).toBe(6)
+  })
+
+  it('replaces a score rather than adding a second one', async () => {
+    // The whole point of the change: a voter can keep adjusting until the
+    // organiser closes voting, and adjusting must not accumulate rows.
+    const { eventId, demoIds, codes } = await seed()
+    const cookie = await redeem(eventId, codes[0]!)
+
+    await score(cookie, demoIds[0]!, 1)
+    await score(cookie, demoIds[0]!, 5)
+    await score(cookie, demoIds[0]!, 3)
+
+    expect(await countScores(eventId)).toBe(1)
+    expect(await storedScore(codes[0]!, demoIds[0]!)).toBe(3)
+  })
+
+  it('refuses a score outside 1-5, and anything that is not a whole number', async () => {
+    const { eventId, demoIds, codes } = await seed()
+    const cookie = await redeem(eventId, codes[0]!)
+
+    for (const bad of [0, 6, -1, 2.5, Number.NaN]) {
+      const response = await score(cookie, demoIds[0]!, bad)
+      expect(response.status).toBe(400)
+      expect(await response.json()).toMatchObject({ error: 'BAD_SCORE' })
+    }
+
+    // A missing score is refused for the same reason: defaulting it would put a
+    // number nobody chose into somebody's ballot.
+    const missing = await api('/api/score', {
       method: 'POST',
       cookie,
       body: JSON.stringify({ demoId: demoIds[0] }),
     })
-    expect(first.status).toBe(200)
-
-    const second = await api('/api/vote', {
-      method: 'POST',
-      cookie,
-      body: JSON.stringify({ demoId: demoIds[1] }),
-    })
-    expect(second.status).toBe(409)
-    expect(await second.json()).toMatchObject({ error: 'ALREADY_VOTED' })
-
-    expect(await countVotes(eventId)).toBe(1)
+    expect(missing.status).toBe(400)
+    expect(await countScores(eventId)).toBe(0)
   })
 
   /**
    * The reason this project uses D1 rather than KV.
    *
-   * Twenty ballots for the same code are dispatched before any of them
-   * finishes, so every request observes codes.used_at as NULL. An
-   * implementation that checked "has this code voted?" and then inserted would
-   * write many rows here and pass every other test in this file.
+   * Twenty writes for the same demo are dispatched before any of them finishes,
+   * so every request observes no existing row. An implementation that checked
+   * "has this code scored this demo?" and then inserted would write many rows
+   * here and pass every other test in this file. UNIQUE(code, demo_id) is what
+   * turns all but one of them into an update.
    */
-  it('survives twenty simultaneous ballots from one code', async () => {
+  it('survives twenty simultaneous writes for one demo', async () => {
     const { eventId, demoIds, codes } = await seed()
     const cookie = await redeem(eventId, codes[0]!)
 
     const responses = await Promise.all(
-      Array.from({ length: 20 }, (_, index) =>
-        api('/api/vote', {
-          method: 'POST',
-          cookie,
-          body: JSON.stringify({ demoId: demoIds[index % demoIds.length] }),
-        }),
-      ),
+      Array.from({ length: 20 }, () => score(cookie, demoIds[0]!, 4)),
     )
 
-    const accepted = responses.filter((response) => response.status === 200)
-    const rejected = responses.filter((response) => response.status === 409)
-
-    expect(accepted).toHaveLength(1)
-    expect(rejected).toHaveLength(19)
-    expect(await countVotes(eventId)).toBe(1)
-  })
-
-  /**
-   * The limiter is keyed on the code, not on the caller's address: a venue puts
-   * the whole room behind one NAT address. It is a ceiling on database work and
-   * nothing more, and it deliberately sits above the burst the test above needs,
-   * so that test keeps reaching the constraint that actually guarantees one vote.
-   */
-  it('caps one code hammering the vote endpoint', async () => {
-    const { eventId, demoIds, codes } = await seed()
-    const cookie = await redeem(eventId, codes[0]!)
-
-    const responses = await Promise.all(
-      Array.from({ length: 40 }, (_, index) =>
-        api('/api/vote', {
-          method: 'POST',
-          cookie,
-          body: JSON.stringify({ demoId: demoIds[index % demoIds.length] }),
-        }),
-      ),
-    )
-
-    const statuses = responses.map((response) => response.status)
-    expect(statuses.filter((status) => status === 429).length).toBeGreaterThan(0)
-    // The refusals are still refusals, whichever layer produced them.
-    expect(statuses.filter((status) => status === 200)).toHaveLength(1)
-    expect(await countVotes(eventId)).toBe(1)
+    expect(responses.every((response) => response.status === 200)).toBe(true)
+    expect(await countScores(eventId)).toBe(1)
+    expect(await storedScore(codes[0]!, demoIds[0]!)).toBe(4)
   })
 
   it('rejects a duplicate insert at the database level', async () => {
@@ -195,40 +217,90 @@ describe('one code, one vote', () => {
     // application logic that might later be refactored around it.
     const { eventId, demoIds, codes } = await seed()
     const code = codes[0]!
+    const at = new Date().toISOString()
 
     const attempts = await Promise.allSettled(
-      Array.from({ length: 20 }, (_, index) =>
+      Array.from({ length: 20 }, () =>
         env.DB.prepare(
-          `INSERT INTO votes (event_id, demo_id, code, created_at) VALUES (?, ?, ?, ?)`,
+          `INSERT INTO votes (event_id, demo_id, code, score, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
         )
-          .bind(eventId, demoIds[index % demoIds.length], code, new Date().toISOString())
+          .bind(eventId, demoIds[0], code, 3, at, at)
           .run(),
       ),
     )
 
     expect(attempts.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
-    expect(await countVotes(eventId)).toBe(1)
+    expect(await countScores(eventId)).toBe(1)
   })
 
-  it('will not issue a new session for a code that already voted', async () => {
+  it('refuses a score below 1 or above 5 at the database level', async () => {
+    // The Worker validates first; this is the backstop for anything that
+    // reaches the table another way.
+    const { eventId, demoIds, codes } = await seed()
+    const at = new Date().toISOString()
+
+    await expect(
+      env.DB.prepare(
+        `INSERT INTO votes (event_id, demo_id, code, score, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+        .bind(eventId, demoIds[0], codes[0], 9, at, at)
+        .run(),
+    ).rejects.toThrow()
+    expect(await countScores(eventId)).toBe(0)
+  })
+
+  /**
+   * The limiter is keyed on the code, not on the caller's address: a venue puts
+   * the whole room behind one NAT address. It is a ceiling on database work and
+   * nothing more, and it sits well above what an indecisive voter produces, so
+   * the burst test above keeps reaching the constraint rather than the limit.
+   */
+  // Given a generous timeout rather than a smaller burst: proving the ceiling
+  // exists means clearing it, and the ceiling is 200 a minute.
+  it('caps one code hammering the score endpoint', { timeout: 60_000 }, async () => {
     const { eventId, demoIds, codes } = await seed()
     const cookie = await redeem(eventId, codes[0]!)
-    await api('/api/vote', {
-      method: 'POST',
-      cookie,
-      body: JSON.stringify({ demoId: demoIds[0] }),
-    })
 
-    const retry = await api('/api/session', {
-      method: 'POST',
-      body: JSON.stringify({ eventId, code: codes[0] }),
-    })
-    expect(retry.status).toBe(409)
-    expect(await retry.json()).toMatchObject({ error: 'CODE_ALREADY_USED' })
+    // Twenty at a time rather than 260 at once. The point is to clear the
+    // ceiling inside one window, not to see how many sockets miniflare will open
+    // before it drops the connection out from under the test.
+    const statuses: number[] = []
+    for (let sent = 0; sent < 260; sent += 20) {
+      const batch = await Promise.all(
+        Array.from({ length: 20 }, (_, index) =>
+          score(cookie, demoIds[(sent + index) % demoIds.length]!, ((sent + index) % 5) + 1),
+        ),
+      )
+      statuses.push(...batch.map((response) => response.status))
+    }
+
+    expect(statuses.filter((status) => status === 429).length).toBeGreaterThan(0)
+    // However many were refused, the ballot cannot hold more rows than it has
+    // demos: the constraint, not the limiter, is what decides that.
+    expect(await countScores(eventId)).toBeLessThanOrEqual(demoIds.length)
   })
 })
 
 describe('code redemption', () => {
+  it('still issues a session to a code that has already scored', async () => {
+    // Under one-vote-each this was refused, because the code had spent its
+    // vote. A ballot is now editable for the whole window, so refusing here
+    // would lock somebody out of scores they are still entitled to change —
+    // a dropped cookie would cost them their ballot.
+    const { eventId, demoIds, codes } = await seed()
+    const cookie = await redeem(eventId, codes[0]!)
+    await scoreAll(cookie, demoIds, 4)
+
+    const again = await redeem(eventId, codes[0]!)
+    const ballot = await (await api('/api/ballot', { cookie: again })).json<{
+      scored: number
+      complete: boolean
+    }>()
+    expect(ballot).toMatchObject({ scored: 6, complete: true })
+  })
+
   it('lets an unused code be redeemed twice, so a closed tab is recoverable', async () => {
     const { eventId, codes } = await seed()
     await redeem(eventId, codes[0]!)
@@ -294,30 +366,29 @@ describe('the voting window', () => {
     expect(await response.json()).toMatchObject({ error: 'VOTING_CLOSED' })
   })
 
-  it('refuses a vote from a session that outlived the window', async () => {
+  it('freezes scores when the organiser closes early', async () => {
+    // Closing is what makes a score final. Up to that moment every score on the
+    // ballot is provisional, so this is the only line that ends the editing.
     const { eventId, demoIds, codes } = await seed({ closesInSeconds: 2 })
     const cookie = await redeem(eventId, codes[0]!)
+    await score(cookie, demoIds[0]!, 2)
 
-    // The organiser closes early, after the cookie was handed out.
     await env.DB.prepare(`UPDATE events SET status = 'closed' WHERE id = ?`).bind(eventId).run()
 
-    const response = await api('/api/vote', {
-      method: 'POST',
-      cookie,
-      body: JSON.stringify({ demoId: demoIds[0] }),
-    })
+    const response = await score(cookie, demoIds[0]!, 5)
     expect(response.status).toBe(409)
     expect(await response.json()).toMatchObject({ error: 'VOTING_CLOSED' })
-    expect(await countVotes(eventId)).toBe(0)
+    // The score set while the window was open survives untouched.
+    expect(await storedScore(codes[0]!, demoIds[0]!)).toBe(2)
   })
 })
 
 describe('authorisation', () => {
-  it('rejects a vote with no session cookie', async () => {
+  it('rejects a score with no session cookie', async () => {
     const { demoIds } = await seed()
-    const response = await api('/api/vote', {
+    const response = await api('/api/score', {
       method: 'POST',
-      body: JSON.stringify({ demoId: demoIds[0] }),
+      body: JSON.stringify({ demoId: demoIds[0], score: 3 }),
     })
     expect(response.status).toBe(401)
     expect(await response.json()).toMatchObject({ error: 'NO_SESSION' })
@@ -325,61 +396,54 @@ describe('authorisation', () => {
 
   it('rejects a forged session cookie', async () => {
     const { eventId, demoIds } = await seed()
-    const response = await api('/api/vote', {
+    const response = await api('/api/score', {
       method: 'POST',
       cookie: 'dv_voter=eyJ0IjoidiJ9.not-a-real-signature',
-      body: JSON.stringify({ demoId: demoIds[0] }),
+      body: JSON.stringify({ demoId: demoIds[0], score: 3 }),
     })
     expect(response.status).toBe(401)
-    expect(await countVotes(eventId)).toBe(0)
+    expect(await countScores(eventId)).toBe(0)
   })
 
-  it('rejects a vote for a demo from another event', async () => {
+  it('rejects a score for a demo from another event', async () => {
     const other = await seed()
     const target = await seed()
     const cookie = await redeem(target.eventId, target.codes[0]!)
 
-    const response = await api('/api/vote', {
-      method: 'POST',
-      cookie,
-      body: JSON.stringify({ demoId: other.demoIds[0] }),
-    })
+    const response = await score(cookie, other.demoIds[0]!, 4)
     expect(response.status).toBe(400)
     expect(await response.json()).toMatchObject({ error: 'UNKNOWN_DEMO' })
-    expect(await countVotes(other.eventId)).toBe(0)
+    expect(await countScores(other.eventId)).toBe(0)
   })
 })
 
 describe('the tally never leaks to a voter', () => {
-  it('keeps counts out of every voter-facing payload', async () => {
+  it('keeps everybody else out of every voter-facing payload', async () => {
     const { eventId, demoIds, codes } = await seed({ codeCount: 2 })
 
-    // Put a real vote on the board so a leak would have something to show.
+    // Put a real ballot on the board so a leak would have something to show.
     const firstCookie = await redeem(eventId, codes[0]!)
-    await api('/api/vote', {
-      method: 'POST',
-      cookie: firstCookie,
-      body: JSON.stringify({ demoId: demoIds[0] }),
-    })
+    await scoreAll(firstCookie, demoIds, 5)
 
     const cookie = await redeem(eventId, codes[1]!)
     const payloads = [
       await (await api('/api/ballot', { cookie })).text(),
-      await (
-        await api('/api/vote', {
-          method: 'POST',
-          cookie,
-          body: JSON.stringify({ demoId: demoIds[0] }),
-        })
-      ).text(),
+      await (await score(cookie, demoIds[0]!, 1)).text(),
       await (await api(`/api/event/${eventId}`)).text(),
     ]
 
     for (const payload of payloads) {
       expect(payload).not.toContain('tally')
-      expect(payload).not.toContain('votes')
-      expect(payload).not.toContain('count')
+      expect(payload).not.toContain('average')
+      expect(payload).not.toContain('ballots')
     }
+
+    // The ballot does carry scores — this voter's own, and only theirs. The
+    // other ballot scored everything 5 and this one has nothing above 1.
+    const own = await (await api('/api/ballot', { cookie })).json<{
+      myScores: Record<string, number>
+    }>()
+    expect(Object.values(own.myScores)).toEqual([1])
   })
 
   it('refuses the public results endpoint until the organiser reveals', async () => {
@@ -395,6 +459,81 @@ describe('the tally never leaks to a voter', () => {
     const response = await api(`/api/admin/event/${eventId}/results`)
     expect(response.status).toBe(401)
     expect(await response.json()).toMatchObject({ error: 'ADMIN_REQUIRED' })
+  })
+})
+
+/**
+ * A ballot counts only once it has scored every demo.
+ *
+ * Scores are saved one at a time as the voter sets them, so a half-finished
+ * ballot is the normal state of affairs for most of the window and the database
+ * is full of them. Counting those partial rows would hand whichever demos
+ * somebody happened to reach before putting their phone away an advantage over
+ * the ones they never got to.
+ */
+describe('only complete ballots count', () => {
+  async function revealedTally(eventId: string) {
+    await env.DB.prepare(`UPDATE events SET status = 'revealed' WHERE id = ?`).bind(eventId).run()
+    return (await api(`/api/results/${eventId}`)).json<{
+      ballots: number
+      tally: { slot: number; score: number; average: number }[]
+    }>()
+  }
+
+  it('leaves a partial ballot out of the totals entirely', async () => {
+    const { eventId, demoIds, codes } = await seed({ codeCount: 2 })
+
+    const complete = await redeem(eventId, codes[0]!)
+    await scoreAll(complete, demoIds, 3)
+
+    // Scores two demos and stops, which is what walking out mid-session looks
+    // like from the database's side.
+    const partial = await redeem(eventId, codes[1]!)
+    await score(partial, demoIds[0]!, 5)
+    await score(partial, demoIds[1]!, 5)
+
+    const results = await revealedTally(eventId)
+    expect(results.ballots).toBe(1)
+    // Not 8. The abandoned 5s would otherwise put demo 1 top on the strength of
+    // a ballot that never scored the other four.
+    expect(results.tally.every((row) => row.score === 3)).toBe(true)
+  })
+
+  it('counts a ballot the moment its last demo is scored', async () => {
+    const { eventId, demoIds, codes } = await seed({ codeCount: 1 })
+    const cookie = await redeem(eventId, codes[0]!)
+
+    for (const demoId of demoIds.slice(0, 5)) await score(cookie, demoId, 4)
+    let results = await revealedTally(eventId)
+    expect(results.ballots).toBe(0)
+    expect(results.tally.every((row) => row.score === 0)).toBe(true)
+
+    await env.DB.prepare(`UPDATE events SET status = 'open' WHERE id = ?`).bind(eventId).run()
+    await score(cookie, demoIds[5]!, 4)
+
+    results = await revealedTally(eventId)
+    expect(results.ballots).toBe(1)
+    expect(results.tally.every((row) => row.score === 4)).toBe(true)
+  })
+
+  it('ranks by total and reports the average alongside it', async () => {
+    const { eventId, demoIds, codes } = await seed({ codeCount: 2 })
+
+    for (const code of codes.slice(0, 2)) {
+      const cookie = await redeem(eventId, code)
+      for (const [index, demoId] of demoIds.entries()) {
+        // Demo 1 gets 5s, demo 2 gets 4s, and so on down to demo 5; demo 6
+        // shares demo 5's score so there is a tie to place.
+        await score(cookie, demoId, Math.max(1, 5 - index))
+      }
+    }
+
+    const results = await revealedTally(eventId)
+    expect(results.ballots).toBe(2)
+    expect(results.tally.map((row) => row.slot)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(results.tally.map((row) => row.score)).toEqual([10, 8, 6, 4, 2, 2])
+    // Two ballots each, so every average is its total halved.
+    expect(results.tally.map((row) => row.average)).toEqual([5, 4, 3, 2, 1, 1])
   })
 })
 
@@ -499,27 +638,37 @@ describe('the ballot', () => {
     const body = await (await api('/api/ballot', { cookie })).json<{
       demos: { slot: number; name: string }[]
       secondsRemaining: number
-      hasVoted: boolean
+      scored: number
+      complete: boolean
+      minScore: number
+      maxScore: number
       votingLive: boolean
     }>()
 
     expect(body.demos.map((demo) => demo.slot)).toEqual([1, 2, 3, 4, 5, 6])
     expect(body.votingLive).toBe(true)
-    expect(body.hasVoted).toBe(false)
+    expect(body.scored).toBe(0)
+    expect(body.complete).toBe(false)
+    expect([body.minScore, body.maxScore]).toEqual([1, 5])
     expect(body.secondsRemaining).toBeGreaterThan(3500)
   })
 
-  it('reports hasVoted after the ballot is cast, so a reload shows the thanks screen', async () => {
+  it('hands back the scores already set, so a reload resumes the ballot', async () => {
+    // Without this a voter who reloads sees an empty ballot and has no way to
+    // tell whether their scores were saved or lost.
     const { eventId, demoIds, codes } = await seed()
     const cookie = await redeem(eventId, codes[0]!)
-    await api('/api/vote', {
-      method: 'POST',
-      cookie,
-      body: JSON.stringify({ demoId: demoIds[0] }),
-    })
+    await score(cookie, demoIds[0]!, 5)
+    await score(cookie, demoIds[2]!, 2)
 
-    const body = await (await api('/api/ballot', { cookie })).json<{ hasVoted: boolean }>()
-    expect(body.hasVoted).toBe(true)
+    const body = await (await api('/api/ballot', { cookie })).json<{
+      myScores: Record<string, number>
+      scored: number
+      complete: boolean
+    }>()
+
+    expect(body.myScores).toEqual({ [demoIds[0]!]: 5, [demoIds[2]!]: 2 })
+    expect(body).toMatchObject({ scored: 2, complete: false })
   })
 })
 
@@ -533,8 +682,8 @@ describe('the ballot', () => {
  *
  * Without this, somebody holding a live session for one event who scans the
  * other event's QR is silently dropped back into the first: the ballot endpoint
- * resolves the event from the cookie, so they are shown their existing receipt
- * and never get to vote in the event actually in front of them.
+ * resolves the event from the cookie, so they are shown the ballot they have
+ * already filled in and never get to score the event in front of them.
  */
 describe('two events running at once', () => {
   it("refuses to serve one event's ballot to a session from another", async () => {
@@ -550,31 +699,22 @@ describe('two events running at once', () => {
     expect((await other.json<{ error: string }>()).error).toBe('NO_SESSION')
   })
 
-  it('lets somebody who voted in one event vote once in the other', async () => {
+  it('lets somebody who scored one event score the other', async () => {
     const first = await seed()
     const second = await seed()
 
     const firstCookie = await redeem(first.eventId, first.codes[0]!)
-    await api('/api/vote', {
-      method: 'POST',
-      cookie: firstCookie,
-      body: JSON.stringify({ demoId: first.demoIds[0] }),
-    })
+    await scoreAll(firstCookie, first.demoIds, 3)
 
     // Scanning the other event's QR while still holding the first session must
-    // not hand back the receipt for the vote just cast.
+    // not hand back the ballot just filled in.
     const stale = await api(`/api/ballot?eventId=${second.eventId}`, { cookie: firstCookie })
     expect(stale.status).toBe(401)
 
     const secondCookie = await redeem(second.eventId, second.codes[0]!)
-    const cast = await api('/api/vote', {
-      method: 'POST',
-      cookie: secondCookie,
-      body: JSON.stringify({ demoId: second.demoIds[0] }),
-    })
-    expect(cast.status).toBe(200)
+    await scoreAll(secondCookie, second.demoIds, 5)
 
-    expect(await countVotes(first.eventId)).toBe(1)
-    expect(await countVotes(second.eventId)).toBe(1)
+    expect(await countScores(first.eventId)).toBe(6)
+    expect(await countScores(second.eventId)).toBe(6)
   })
 })

@@ -8,12 +8,11 @@
 const MESSAGES: Record<string, string> = {
   INVALID_CODE:
     'That code was not recognised. Check the characters on your slip and try again, or ask a steward for a replacement.',
-  CODE_ALREADY_USED: 'This code has already been used. Each code is good for one vote.',
-  ALREADY_VOTED: 'You have already voted. One vote per person.',
   VOTING_NOT_OPEN: 'Voting has not opened yet. Wait for the organisers to announce it.',
-  VOTING_CLOSED: 'Voting has closed.',
+  VOTING_CLOSED: 'Voting has closed. Scores are final.',
+  BAD_SCORE: 'Scores run from 1 to 5. Refresh the page and try again.',
   EVENT_NOT_FOUND: 'No such event. Check the QR code or the web address.',
-  NO_SESSION: 'Your session has expired. Enter your code again.',
+  NO_SESSION: 'Your session has expired. Enter your code again — the scores you set are saved.',
   UNKNOWN_DEMO: 'That option is not part of this event. Refresh the page.',
   RATE_LIMITED: 'Too many attempts. Wait a minute and try again.',
   ADMIN_REQUIRED: 'Organiser access required.',

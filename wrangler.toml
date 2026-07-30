@@ -7,8 +7,8 @@ main = "worker/index.ts"
 # No nodejs_compat: the Worker uses only Web Crypto and the D1 binding.
 compatibility_date = "2026-07-26"
 
-# Votes are cast once and cannot be recast. When something goes wrong during a
-# live event there is no second chance to reproduce it, so keep full logs.
+# Scores stop being revisable the moment the window closes, and there is no
+# second chance to reproduce a live event, so keep full logs.
 [observability]
 enabled = true
 head_sampling_rate = 1
@@ -23,10 +23,11 @@ binding = "ASSETS"
 directory = "dist/client"
 not_found_handling = "single-page-application"
 
-# D1 (not KV) is the source of truth for votes. The one-vote-per-code guarantee
-# is a UNIQUE constraint on votes.code, which requires a strongly consistent
-# store: KV's eventual consistency would let two concurrent requests both read
-# "unused" and double-count. database_id is rewritten at deploy time by
+# D1 (not KV) is the source of truth for scores. One-score-per-demo-per-code is
+# a UNIQUE constraint on (code, demo_id), which requires a strongly consistent
+# store: KV's eventual consistency would let two concurrent writes for the same
+# demo both read "nothing there" and land as two rows, double-counting that demo
+# in the sum. database_id is rewritten at deploy time by
 # scripts/set-d1-database-id.mjs.
 [[d1_databases]]
 binding = "DB"
@@ -68,19 +69,31 @@ period = 60
 # behind one NAT address, so an IP limit on this endpoint would be a limit on the
 # room.
 #
-# This is a ceiling on database work, not the anti-double-vote mechanism. That is
-# the UNIQUE constraint on votes.code, and it has to stay reachable: the test in
-# tests/voting.test.ts fires twenty simultaneous ballots from one code and
-# requires nineteen of them to be refused BY THE CONSTRAINT, with a 409. A limit
-# below twenty would answer most of them 429 instead, and the one guarantee this
-# project cannot get wrong would go untested while every test still passed. Hence
-# a limit above that burst: it does nothing to any real voter, and it still caps
-# a script pointed at this endpoint with a valid cookie.
+# Sized for scoring, which is a different shape of traffic from voting. This was
+# 30 a minute, which was generous when a code was entitled to press one button
+# once. A code now writes once per demo and again on every adjustment: six demos,
+# a couple of passes back over them while the next team sets up, and a minute
+# with thirty requests in it is an ordinary attentive voter rather than an
+# attack. A limit that low would answer real people 429 in the last minute of the
+# window, which is exactly when they are still deciding.
+#
+# A hundred a minute is still several times what the most indecisive person in
+# the room can produce by hand, and it stays low enough that the test which
+# proves the ceiling exists can actually clear it: 260 requests in a batched loop
+# takes seconds, where clearing a limit of several hundred takes long enough that
+# the earliest ones age out of the window and the test stops proving anything.
+#
+# It remains a ceiling on database work and nothing more. Nothing about the
+# integrity of a ballot rests on it: that is UNIQUE(code, demo_id), which turns a
+# repeated write into an update rather than a second row however many arrive at
+# once. tests/voting.test.ts fires twenty simultaneous writes for one demo and
+# requires exactly one row to exist afterwards, so this has to stay above that
+# burst for the constraint to be what the test reaches.
 [[ratelimits]]
 name = "VOTE_RATE_LIMITER"
 namespace_id = "2003"
 [ratelimits.simple]
-limit = 30
+limit = 100
 period = 60
 
 [vars]

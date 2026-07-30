@@ -11,7 +11,7 @@ import {
   postCodes,
   putAdminEvent,
 } from './routes/admin'
-import { getBallot, getPublicEvent, postSession, postVote } from './routes/voter'
+import { getBallot, getPublicEvent, postScore, postSession } from './routes/voter'
 import { fail, json } from './http'
 
 /**
@@ -71,7 +71,7 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
   if (pathname === '/api/current-event' && method === 'GET') return getPublicEvent(request, env)
   if (pathname === '/api/session' && method === 'POST') return postSession(request, env)
   if (pathname === '/api/ballot' && method === 'GET') return getBallot(request, env)
-  if (pathname === '/api/vote' && method === 'POST') return postVote(request, env)
+  if (pathname === '/api/score' && method === 'POST') return postScore(request, env)
 
   const publicEvent = match(pathname, '/api/event/')
   if (publicEvent && method === 'GET') return getPublicEvent(request, env, publicEvent)

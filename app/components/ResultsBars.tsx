@@ -16,10 +16,13 @@ import { RollingNumber } from './RollingNumber'
  */
 export function ResultsBars({
   tally,
+  maxScore,
   revealed,
   fillDelay = 0,
 }: {
   tally: TallyRow[]
+  /** Top of the scoring scale, from the server. Bars are drawn against it. */
+  maxScore: number
   revealed: boolean
   /**
    * Holds the bars at zero for this many seconds before they grow.
@@ -35,14 +38,11 @@ export function ResultsBars({
   const flipState = useRef<Flip.FlipState | null>(null)
   const capturedFor = useRef<string | null>(null)
 
-  const total = tally.reduce((sum, row) => sum + row.votes, 0)
-  const leaderVotes = tally[0]?.votes ?? 0
-
   // The dashboard polls every two seconds and hands us a fresh array each time,
   // so the array identity changes constantly while the numbers in it do not.
   // Keying the work to the values means an unchanged tally costs nothing: no
   // layout read, no tween, no rAF burning for the hour a dashboard is left open.
-  const signature = tally.map((row) => `${row.demoId}:${row.votes}`).join(',')
+  const signature = tally.map((row) => `${row.demoId}:${row.score}`).join(',')
 
   // Captured during render, while the DOM still holds the previous order. React
   // has not committed the new children yet at this point, and this only reads
@@ -86,12 +86,14 @@ export function ResultsBars({
   return (
     <ul className="results" ref={listRef}>
       {rankTally(tally).map((row) => {
-        // Bars are scaled against the leader, not against the total. With six
-        // demos splitting the room the longest bar would otherwise sit at a
-        // fifth of the track and the chart would read as empty.
-        const share = leaderVotes > 0 ? row.votes / leaderVotes : 0
-        const percent = total > 0 ? Math.round((row.votes / total) * 100) : 0
-        // Every demo sharing the top count, not the first row of the array. On a
+        // Bars run against the top of the scale rather than against the leader.
+        // Under one-vote-each the leader was the only sensible reference, because
+        // six demos splitting a room left every bar near the left edge. An
+        // average out of five has a meaningful ceiling of its own, and using it
+        // means a bar length says something absolute — four out of five is four
+        // fifths of the track whether or not anything beat it.
+        const share = maxScore > 0 ? Math.min(1, row.average / maxScore) : 0
+        // Every demo sharing the top score, not the first row of the array. On a
         // tie the array order is decided by slot number, which is not a result.
         const isLeader = revealed && row.leading
 
@@ -110,9 +112,13 @@ export function ResultsBars({
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <RollingNumber className="result__count" value={row.votes} />
+              {/* The total is what the ranking is on, so it is the headline.
+                  RollingNumber counts through the integers between two values,
+                  which is right for a sum and wrong for an average — 4.3 has no
+                  integers to roll through — so the average is plain text. */}
+              <RollingNumber className="result__count" value={row.score} />
               <div className="label">
-                <RollingNumber value={percent} suffix="%" />
+                {row.average.toFixed(1)} / {maxScore}
               </div>
             </div>
           </li>

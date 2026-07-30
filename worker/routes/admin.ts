@@ -14,6 +14,7 @@ import {
 import { codesToCsv, generateCodeBatch } from '../codes'
 import {
   EMPTY_CODE_STATS,
+  MAX_SCORE,
   getAllCodeStatsByEvent,
   getAllDemosByEvent,
   getCodeStats,
@@ -197,8 +198,10 @@ export async function putAdminEvent(
   }
 
   if (body.demos !== undefined) {
-    // Renaming a demo after votes exist would silently relabel ballots people
-    // already cast, so the roster is frozen once voting starts.
+    // Renaming a demo after scoring starts would silently relabel scores people
+    // have already set, and adding or removing one would change what "scored
+    // every demo" means underneath ballots already counted. The roster is frozen
+    // once voting starts.
     if (event.status !== 'draft') return fail('INVALID_TRANSITION', 409)
     const demoInputs = parseDemoInputs(body.demos)
     if (!demoInputs) return fail('BAD_REQUEST', 400)
@@ -247,7 +250,7 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   draft: ['open'],
   open: ['closed'],
   closed: ['revealed'],
-  // Terminal. Re-opening after a reveal would let someone vote knowing the
+  // Terminal. Re-opening after a reveal would let someone score knowing the
   // standings.
   revealed: [],
 }
@@ -338,14 +341,24 @@ export async function getAdminResults(
   const event = await getEvent(db, eventId)
   if (!event) return fail('EVENT_NOT_FOUND', 404)
 
-  const [tally, stats] = await Promise.all([getTally(db, eventId), getCodeStats(db, eventId)])
+  const demoRows = await listDemos(db, eventId)
+  const [tally, stats] = await Promise.all([
+    getTally(db, eventId, demoRows.length),
+    getCodeStats(db, eventId),
+  ])
   return json({
     ok: true,
     event: { id: event.id, name: event.name, status: event.status },
     votingLive: isVotingLive(event),
     secondsRemaining: secondsRemaining(event),
     stats,
-    tally,
+    // Complete ballots — the denominator behind every number in the tally.
+    ballots: tally.ballots,
+    // Sent rather than assumed by the client: the bars are drawn against the
+    // top of the scale, so a screen that hard-codes it would silently misdraw
+    // every result the day the scale changes.
+    maxScore: MAX_SCORE,
+    tally: tally.rows,
   })
 }
 
@@ -362,9 +375,13 @@ export async function getPublicResults(env: Env, eventId: string): Promise<Respo
   if (!event) return fail('EVENT_NOT_FOUND', 404)
   if (event.status !== 'revealed') return fail('ADMIN_REQUIRED', 403)
 
+  const demoRows = await listDemos(db, eventId)
+  const tally = await getTally(db, eventId, demoRows.length)
   return json({
     ok: true,
     event: { id: event.id, name: event.name, status: event.status },
-    tally: await getTally(db, eventId),
+    ballots: tally.ballots,
+    maxScore: MAX_SCORE,
+    tally: tally.rows,
   })
 }

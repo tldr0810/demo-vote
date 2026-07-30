@@ -15,6 +15,13 @@
       "when": 1785364776619,
       "tag": "0001_archive_events",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785451200000,
+      "tag": "0002_score_votes",
+      "breakpoints": true
     }
   ]
 }

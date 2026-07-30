@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, type Ballot, type PublicEvent, type TallyRow } from '../api'
+import { api, type Ballot, type PublicEvent, type ScoreSaved, type TallyRow } from '../api'
 import { CountdownRing } from '../components/CountdownRing'
 import { DemoCard } from '../components/DemoCard'
 import { ResultsBars } from '../components/ResultsBars'
 import { messageFor } from '../messages'
 import { gsap, motionOk, useGSAP } from '../motion'
 
-type Phase = 'loading' | 'entry' | 'ballot' | 'done' | 'unavailable' | 'results'
+type Phase = 'loading' | 'entry' | 'ballot' | 'unavailable' | 'results'
 
-type Results = { event: { name: string }; tally: TallyRow[] }
+type Results = {
+  event: { name: string }
+  tally: TallyRow[]
+  ballots: number
+  maxScore: number
+}
 
 const CODE_LENGTH = 8
 
@@ -28,37 +33,54 @@ export function Vote({ eventId }: { eventId: string | null }) {
   const [event, setEvent] = useState<PublicEvent | null>(null)
   const [ballot, setBallot] = useState<Ballot | null>(null)
   const [code, setCode] = useState('')
-  const [selected, setSelected] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [votedFor, setVotedFor] = useState<string | null>(null)
   const [results, setResults] = useState<Results | null>(null)
+
+  // What the voter sees, updated the instant they tap. `saved` is what the
+  // server has acknowledged. They are usually identical and deliberately not the
+  // same thing: the progress counter decides whether this ballot will be counted,
+  // so it has to be answered by the server rather than by an optimistic update
+  // that may still fail.
+  const [scores, setScores] = useState<Record<string, number>>({})
+  const [saved, setSaved] = useState<Record<string, number>>({})
+  const [saving, setSaving] = useState<Record<string, boolean>>({})
+
+  // One ticket per demo, incremented on every tap. A response whose ticket has
+  // been superseded is discarded: tapping 2 and then 4 quickly enough sends two
+  // requests, and if the slower one is allowed to write back it leaves the card
+  // showing a score the voter has already changed their mind about.
+  const tickets = useRef<Record<string, number>>({})
 
   const rootRef = useRef<HTMLDivElement>(null)
   const entryCardRef = useRef<HTMLDivElement>(null)
-  const confirmBarRef = useRef<HTMLDivElement>(null)
-  // The bar stays mounted through its exit tween, so dismissing it is a state of
-  // its own rather than the absence of a selection.
-  const [closingBar, setClosingBar] = useState(false)
   // Read by the watcher below, which must not restart its interval every time
   // the voter moves between the entry screen and the ballot.
   const phaseRef = useRef(phase)
   phaseRef.current = phase
 
+  const applyBallot = useCallback((data: Ballot) => {
+    setBallot(data)
+    setScores(data.myScores)
+    setSaved(data.myScores)
+    setPhase('ballot')
+  }, [])
+
   // Always asked for by event. A cookie left over from another event is refused
   // rather than answered, which is what stops a voter holding a live session
   // elsewhere from being dropped into that event instead of this one.
-  const loadBallot = useCallback(async (forEventId: string) => {
-    const result = await api.get<Ballot>(`/api/ballot?eventId=${encodeURIComponent(forEventId)}`)
-    if (!result.ok) return result
-    setBallot(result.data)
-    setPhase(result.data.hasVoted ? 'done' : 'ballot')
-    return result
-  }, [])
+  const loadBallot = useCallback(
+    async (forEventId: string) => {
+      const result = await api.get<Ballot>(`/api/ballot?eventId=${encodeURIComponent(forEventId)}`)
+      if (result.ok) applyBallot(result.data)
+      return result
+    },
+    [applyBallot],
+  )
 
   // Resolve which event this is, then find out whether this browser already
   // holds a session. Someone who refreshes mid-ballot should land back on the
-  // ballot, and someone who already voted should land on their receipt.
+  // ballot with the scores they have already set.
   useEffect(() => {
     let cancelled = false
 
@@ -95,8 +117,7 @@ export function Vote({ eventId }: { eventId: string | null }) {
       if (cancelled) return
 
       if (ballotResult.ok) {
-        setBallot(ballotResult.data)
-        setPhase(ballotResult.data.hasVoted ? 'done' : 'ballot')
+        applyBallot(ballotResult.data)
         return
       }
       setPhase(eventResult.data.votingLive ? 'entry' : 'unavailable')
@@ -106,18 +127,21 @@ export function Vote({ eventId }: { eventId: string | null }) {
     return () => {
       cancelled = true
     }
-  }, [eventId])
+  }, [eventId, applyBallot])
 
   const currentEventId = event?.id ?? null
+  const demoCount = ballot?.demos.length ?? 0
+  const savedCount = Object.keys(saved).length
+  const complete = demoCount > 0 && savedCount >= demoCount
 
   // Every phone that is on this event and not already showing the standings.
   //
-  // The receipt and the closed screen are the obvious two. The entry screen and
-  // the ballot are here because of "Close now": closing early does not move
-  // closesAt, so a phone left on the ballot goes on counting down towards a
-  // deadline that no longer means anything, and a phone that never redeemed a
-  // code has nothing to count down at all. Neither of them would ever ask the
-  // server another question, so neither would find out the event was revealed.
+  // The closed screen is the obvious one. The entry screen and the ballot are
+  // here because of "Close now": closing early does not move closesAt, so a
+  // phone left on the ballot goes on counting down towards a deadline that no
+  // longer means anything, and a phone that never redeemed a code has nothing to
+  // count down at all. Neither of them would ever ask the server another
+  // question, so neither would find out the event was revealed.
   //
   // A draft is excluded, and only a draft: it cannot be revealed without being
   // opened first, so watching it is traffic that can never come back with
@@ -126,7 +150,7 @@ export function Vote({ eventId }: { eventId: string | null }) {
     results === null &&
     event !== null &&
     event.status !== 'draft' &&
-    (phase === 'entry' || phase === 'ballot' || phase === 'done' || phase === 'unavailable')
+    (phase === 'entry' || phase === 'ballot' || phase === 'unavailable')
 
   /**
    * Watches the event this phone is on, and follows it to the end.
@@ -134,9 +158,9 @@ export function Vote({ eventId }: { eventId: string | null }) {
    * Two things can arrive here. The standings, which replace whatever is on
    * screen, so a phone turns into the results by itself rather than telling its
    * owner to go and look elsewhere. And the news that voting is no longer live,
-   * which matters because the organiser can close early: the ballot has to stop
-   * offering a vote the server will refuse, and the countdown has to stop
-   * running towards a deadline that has been overtaken.
+   * which matters more now than it did under one-vote-each: a ballot stays
+   * editable for the whole window, so a phone left open on it is the normal
+   * case, and it has to stop offering changes the server will refuse.
    *
    * Stops on the first set of results and never starts again: ResultsBars
    * animates its rows in, and a re-render landing mid-animation leaves them
@@ -173,11 +197,14 @@ export function Vote({ eventId }: { eventId: string | null }) {
           : current.data,
       )
 
-      // Closed while somebody was still choosing, or still typing their code.
+      // Closed while somebody was still scoring, or still typing their code.
       // Both screens are now offering something that cannot happen.
-      if (!current.data.votingLive && (phaseRef.current === 'entry' || phaseRef.current === 'ballot')) {
+      if (
+        !current.data.votingLive &&
+        (phaseRef.current === 'entry' || phaseRef.current === 'ballot')
+      ) {
         setPhase('unavailable')
-        setError(messageFor('VOTING_CLOSED'))
+        setError(null)
       }
     }
 
@@ -221,71 +248,60 @@ export function Vote({ eventId }: { eventId: string | null }) {
   }
 
   /**
-   * Sends the confirm bar back down before unmounting it.
+   * Sets one demo's score and saves it immediately.
    *
-   * It slid up over 0.38s and then vanished in a single frame, because "Go back"
-   * cleared the selection the bar's own existence was conditional on. Faster on
-   * the way out than in, and eased in rather than out: leaving should feel like
-   * the bar getting out of the way, not like a second announcement.
+   * There is no submit button. A ballot is editable for the whole window, so a
+   * "submit" would either have to be pressed again after every change — which
+   * people forget, and forgetting costs them the whole ballot — or mean nothing.
+   * Saving on the tap makes the score itself the commitment.
    */
-  function dismissConfirmBar() {
-    if (!motionOk() || !confirmBarRef.current) {
-      setSelected(null)
-      return
-    }
-    setClosingBar(true)
-    gsap.to(confirmBarRef.current, {
-      y: '100%',
-      duration: 0.26,
-      ease: 'power2.in',
-      onComplete: () => {
-        setSelected(null)
-        setClosingBar(false)
-      },
-    })
-  }
+  async function setScore(demoId: string, score: number) {
+    if (!ballot || phase !== 'ballot') return
 
-  async function submitVote() {
-    if (busy || !selected || !ballot) return
-    setBusy(true)
+    const ticket = (tickets.current[demoId] ?? 0) + 1
+    tickets.current[demoId] = ticket
+    // Captured now rather than read after the await. Nothing else can change
+    // this demo's confirmed score in the meantime: only a request for this demo
+    // writes the key, and a later one would have superseded this ticket.
+    const confirmed = saved[demoId]
+
+    setScores((previous) => ({ ...previous, [demoId]: score }))
+    setSaving((previous) => ({ ...previous, [demoId]: true }))
     setError(null)
 
-    const chosen = ballot.demos.find((demo) => demo.id === selected)
-    const result = await api.post<{ demoName: string }>('/api/vote', { demoId: selected })
-    setBusy(false)
+    const result = await api.post<ScoreSaved>('/api/score', { demoId, score })
 
-    if (!result.ok) {
-      setError(messageFor(result.error))
-      // ALREADY_VOTED means another tab got there first: show the receipt
-      // rather than leaving a dead ballot on screen.
-      if (result.error === 'ALREADY_VOTED') {
-        setPhase('done')
-        return
-      }
-      // The organiser closed voting between this ballot being drawn and this
-      // button being pressed. Leaving the ballot up would invite the voter to
-      // press it again; the closed screen is also the screen that waits for the
-      // standings, so this is the last thing this phone has to be told.
-      if (result.error === 'VOTING_CLOSED') {
-        setPhase('unavailable')
-        return
-      }
-      // The same treatment a wrong code gets, for the same reason: a failure the
-      // voter caused nothing to move for is a failure they will not notice
-      // before pressing again. The bar carries it because the bar holds the
-      // button that just failed.
-      if (motionOk()) {
-        gsap.fromTo(
-          confirmBarRef.current,
-          { x: -9 },
-          { x: 0, duration: 0.5, ease: 'elastic.out(1, 0.32)', clearProps: 'x' },
-        )
-      }
+    // Superseded by a later tap on the same demo: that request owns this card
+    // now, including the right to clear its saving state.
+    if (tickets.current[demoId] !== ticket) return
+    setSaving((previous) => ({ ...previous, [demoId]: false }))
+
+    if (result.ok) {
+      setSaved((previous) => ({ ...previous, [demoId]: score }))
       return
     }
 
-    setVotedFor(chosen?.name ?? result.data.demoName)
-    setPhase('done')
+    // Put the card back to the last score the server confirmed, so a failure
+    // never leaves a number on screen that is not in the database. Dropping the
+    // key entirely is right when there was no confirmed score: the card returns
+    // to unscored and the progress line goes on saying so.
+    setScores((previous) => {
+      const reverted = { ...previous }
+      if (confirmed === undefined) delete reverted[demoId]
+      else reverted[demoId] = confirmed
+      return reverted
+    })
+
+    if (result.error === 'VOTING_CLOSED') {
+      setPhase('unavailable')
+      return
+    }
+    if (result.error === 'NO_SESSION') {
+      setPhase('entry')
+      setError(messageFor(result.error))
+      return
+    }
+    setError(messageFor(result.error))
   }
 
   // Screen-by-screen intros. Scoped to the root so selectors cannot escape,
@@ -326,21 +342,14 @@ export function Vote({ eventId }: { eventId: string | null }) {
           clearProps: 'all',
         })
       }
-      if (phase === 'done') {
-        gsap
-          .timeline()
-          .from('.receipt', {
-            y: 16,
-            opacity: 0,
-            duration: 0.45,
-            ease: 'power2.out',
-            clearProps: 'all',
-          })
-          .from(
-            '.receipt__mark',
-            { scale: 0.7, opacity: 0, duration: 0.5, ease: 'back.out(2.2)', clearProps: 'all' },
-            '-=0.2',
-          )
+      if (phase === 'unavailable') {
+        gsap.from('.receipt', {
+          y: 16,
+          opacity: 0,
+          duration: 0.45,
+          ease: 'power2.out',
+          clearProps: 'all',
+        })
       }
       // Only the heading. The bars bring their own motion, and a second tween
       // over the same rows would fight it.
@@ -358,16 +367,6 @@ export function Vote({ eventId }: { eventId: string | null }) {
     { dependencies: [phase], scope: rootRef },
   )
 
-  // The confirm bar only exists once something is selected, so it animates in
-  // on its own dependency rather than on phase.
-  useGSAP(
-    () => {
-      if (!selected || !motionOk()) return
-      gsap.from('.confirmbar', { y: '100%', duration: 0.38, ease: 'power3.out', clearProps: 'all' })
-    },
-    { dependencies: [selected !== null], scope: rootRef },
-  )
-
   return (
     <div className="shell" ref={rootRef}>
       {phase === 'loading' ? <p className="label">Loading</p> : null}
@@ -376,14 +375,45 @@ export function Vote({ eventId }: { eventId: string | null }) {
         <div className="stack">
           <div className="eyebrow">
             <span className="label">Demo Vote</span>
+            <span className="label">{ballot?.event.name ?? event?.name}</span>
           </div>
-          <h1>{event?.name ?? 'Vote'}</h1>
-          <p>
-            {error ??
-              (event?.status === 'draft'
-                ? 'Voting has not opened yet. Wait for the organisers to announce it, then refresh this page.'
-                : 'Voting has closed. The results appear here as soon as the organisers publish them.')}
-          </p>
+
+          {/* Someone who scored every demo gets a receipt. Someone who did not
+              gets told plainly that their ballot did not count, because the
+              alternative is letting them leave believing it did. Neither can be
+              acted on any more, so both are stated once and not dwelt on. */}
+          {demoCount > 0 && complete ? (
+            <div className="receipt">
+              <div className="receipt__mark" aria-hidden="true">
+                ✓
+              </div>
+              <h2>Your scores are in</h2>
+              <p style={{ margin: '0 auto' }}>
+                You scored all {demoCount} demos. The standings appear here the moment the
+                organisers publish them, and on the big screen at the same time. Leave this page
+                open.
+              </p>
+            </div>
+          ) : demoCount > 0 ? (
+            <div className="receipt">
+              <h2>Voting has closed</h2>
+              <p style={{ margin: '0 auto' }}>
+                You scored {savedCount} of {demoCount} demos. A ballot counts only once every demo
+                has a score, so this one was not included. The standings still appear here when the
+                organisers publish them.
+              </p>
+            </div>
+          ) : (
+            <>
+              <h1>{event?.name ?? 'Vote'}</h1>
+              <p>
+                {error ??
+                  (event?.status === 'draft'
+                    ? 'Voting has not opened yet. Wait for the organisers to announce it, then refresh this page.'
+                    : 'Voting has closed. The results appear here as soon as the organisers publish them.')}
+              </p>
+            </>
+          )}
         </div>
       ) : null}
 
@@ -396,8 +426,8 @@ export function Vote({ eventId }: { eventId: string | null }) {
 
           <h1 data-anim="entry">Enter your voting code</h1>
           <p data-anim="entry">
-            Your code is on the slip you were given at check-in. {CODE_LENGTH} characters, good
-            for one vote.
+            Your code is on the slip you were given at check-in. {CODE_LENGTH} characters, good for
+            one ballot.
           </p>
 
           <div className="field" data-anim="entry" ref={entryCardRef}>
@@ -440,7 +470,7 @@ export function Vote({ eventId }: { eventId: string | null }) {
             disabled={busy || code.length !== CODE_LENGTH}
             data-busy={busy}
           >
-            {busy ? 'Checking' : 'Start voting'}
+            {busy ? 'Checking' : 'Start scoring'}
           </button>
         </form>
       ) : null}
@@ -452,83 +482,58 @@ export function Vote({ eventId }: { eventId: string | null }) {
             <CountdownRing
               initialSeconds={ballot.secondsRemaining}
               totalSeconds={Math.max(ballot.secondsRemaining, 1)}
-              onExpire={() => {
-                setPhase('unavailable')
-                setError(messageFor('VOTING_CLOSED'))
-              }}
+              onExpire={() => setPhase('unavailable')}
             />
           </div>
 
-          <h1 data-anim="ballot-head">Pick the best demo</h1>
-          <p data-anim="ballot-head">One vote each. It cannot be changed once submitted.</p>
+          <h1 data-anim="ballot-head">Score every demo</h1>
+          <p data-anim="ballot-head">
+            {ballot.minScore} is the lowest, {ballot.maxScore} the highest. Change your mind as
+            often as you like — scores save as you set them and stay editable until voting closes.
+          </p>
 
-          <ul className="ballot" data-has-selection={selected !== null}>
+          {/* The one line that stops autosave from misleading anybody. Every
+              card says "Saved" the moment it is scored, which on its own reads
+              as "you are done"; a ballot missing even one demo is not counted at
+              all, so the fraction and what it means have to be on screen the
+              whole time, not just at the end. */}
+          <div
+            className="ballotstatus"
+            data-complete={complete}
+            role="status"
+            aria-live="polite"
+          >
+            {complete ? (
+              <>
+                <strong>All {demoCount} scored.</strong> Your ballot counts. You can still adjust
+                any score until voting closes.
+              </>
+            ) : (
+              <>
+                <strong>
+                  {savedCount} of {demoCount} scored.
+                </strong>{' '}
+                A ballot counts only once every demo has a score.
+              </>
+            )}
+          </div>
+
+          <ul className="ballot">
             {ballot.demos.map((demo) => (
               <DemoCard
                 key={demo.id}
                 demo={demo}
-                selected={selected === demo.id}
-                onSelect={setSelected}
+                score={scores[demo.id] ?? null}
+                min={ballot.minScore}
+                max={ballot.maxScore}
+                saving={saving[demo.id] === true}
+                onScore={setScore}
               />
             ))}
           </ul>
 
           <div className="error" role="alert">
             {error}
-          </div>
-
-          {selected ? (
-            <div className="confirmbar" ref={confirmBarRef} data-closing={closingBar}>
-              <div className="confirmbar__inner">
-                <div className="confirmbar__warning">
-                  You have chosen{' '}
-                  <strong style={{ color: 'var(--text)' }}>
-                    {ballot.demos.find((demo) => demo.id === selected)?.name}
-                  </strong>
-                  . This cannot be undone.
-                </div>
-                <div className="row">
-                  <button
-                    className="btn btn--ghost btn--sm"
-                    type="button"
-                    onClick={dismissConfirmBar}
-                    disabled={busy}
-                  >
-                    Go back
-                  </button>
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={submitVote}
-                    disabled={busy}
-                    data-busy={busy}
-                    style={{ flex: 1 }}
-                  >
-                    {busy ? 'Submitting' : 'Cast my vote'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {phase === 'done' ? (
-        <div className="stack">
-          <div className="eyebrow">
-            <span className="label">Demo Vote</span>
-            <span className="label">{ballot?.event.name ?? event?.name}</span>
-          </div>
-          <div className="receipt">
-            <div className="receipt__mark" aria-hidden="true">
-              ✓
-            </div>
-            <h2>Your vote is in</h2>
-            {votedFor ? <p style={{ margin: '0 auto' }}>You voted for {votedFor}</p> : null}
-            <p style={{ margin: '0 auto' }}>
-              The standings appear here the moment the organisers publish them, and on the big
-              screen at the same time. Leave this page open.
-            </p>
           </div>
         </div>
       ) : null}
@@ -540,10 +545,10 @@ export function Vote({ eventId }: { eventId: string | null }) {
             <span className="label">{results.event.name}</span>
           </div>
           <h1 data-anim="results-head">Results</h1>
-          {/* Carried over from the receipt this screen replaces, so the one
-              thing the voter knew a moment ago is not taken away from them. */}
-          {votedFor ? <p data-anim="results-head">You voted for {votedFor}</p> : null}
-          <ResultsBars tally={results.tally} revealed />
+          <p data-anim="results-head">
+            {results.ballots} {results.ballots === 1 ? 'ballot' : 'ballots'} counted.
+          </p>
+          <ResultsBars tally={results.tally} maxScore={results.maxScore} revealed />
         </div>
       ) : null}
     </div>
