@@ -804,6 +804,15 @@ p {
   border-color: var(--warn);
 }
 
+/* The window ran out by itself and is waiting on the organiser. Warn rather
+   than the accent, because this is the one pill that is asking for something:
+   the accent says "running", and this is the opposite of running. --warn is
+   already gated against both surfaces in scripts/check-contrast.mjs. */
+.pill[data-status='ended'] {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
 /* The QR sits on its own white card in both themes. A dark-mode QR does not
    scan, and this is the one element that has to survive being printed. */
 .qr-block {

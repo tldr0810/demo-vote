@@ -5,6 +5,7 @@ import { EventPicker } from '../components/EventPicker'
 import { ResultsBars } from '../components/ResultsBars'
 import { RollingNumber } from '../components/RollingNumber'
 import { VoteQr } from '../components/VoteQr'
+import { dashboardStatus, tallyCanChange } from '../adminStatus'
 import { STATUS_LABEL, messageFor } from '../messages'
 
 const RESULTS_POLL_MS = 2000
@@ -64,13 +65,27 @@ export function Admin() {
 
   // The dashboard is the only live view of the tally, so it polls while voting
   // is running and stops as soon as it is not.
+  //
+  // "Is not" has two halves, and only one of them is a status. The organiser
+  // pressing Close is caught by the dependency below; the window running out on
+  // its own is not, because nothing writes to the event row when a deadline
+  // passes. So the second half is decided here, from the reading that discovered
+  // it: `votingLive` going false means this tally is final, and every request
+  // after that one comes back with the same numbers for as long as the dashboard
+  // is left open.
   useEffect(() => {
     if (!selectedId || !authed) return
     let cancelled = false
+    let timer = 0
 
     async function poll() {
       const result = await api.get<AdminResults>(`/api/admin/event/${selectedId}/results`)
-      if (!cancelled && result.ok) setResults(result.data)
+      if (cancelled || !result.ok) return
+      setResults(result.data)
+      if (!result.data.votingLive && timer !== 0) {
+        window.clearInterval(timer)
+        timer = 0
+      }
     }
 
     void poll()
@@ -78,7 +93,7 @@ export function Admin() {
       cancelled = true
     }
 
-    const timer = window.setInterval(poll, RESULTS_POLL_MS)
+    timer = window.setInterval(poll, RESULTS_POLL_MS)
     return () => {
       cancelled = true
       window.clearInterval(timer)
@@ -191,10 +206,20 @@ export function Admin() {
           <EventPicker
             label="Event"
             value={selectedId ?? ''}
+            // Only the selected event can be labelled from the clock — it is the
+            // one the polled results describe. The rest fall back to their own
+            // status, which is what dashboardStatus does with no reading. That
+            // asymmetry is the honest one: the alternative is this list
+            // contradicting the pill three lines below it about the very event
+            // being looked at.
             options={listed.map((event) => ({
               id: event.id,
               label: `${event.name} · ${
-                event.archivedAt ? 'Archived' : STATUS_LABEL[event.status]
+                event.archivedAt
+                  ? 'Archived'
+                  : STATUS_LABEL[
+                      dashboardStatus(event, results?.event.id === event.id ? results : null)
+                    ]
               }`,
             }))}
             onChange={(id) => {
@@ -397,6 +422,12 @@ function EventPanel({
   const stats = results?.stats ?? event.stats
   const voteUrl = `${window.location.origin}/v/${event.id}`
 
+  // The id check is not defensive noise: switching events clears `results`, but
+  // a poll for the previous one can still be in flight, and a stale reading is
+  // exactly what this whole change is about not showing.
+  const status = dashboardStatus(event, results?.event.id === event.id ? results : null)
+  const live = tallyCanChange(status)
+
   return (
     <div className="stack">
       <div className="panel">
@@ -407,8 +438,8 @@ function EventPanel({
                 not a fifth status value: "archived" alone would lose whether this
                 event finished closed or revealed. */}
             {event.archivedAt ? <span className="pill">Archived</span> : null}
-            <span className="pill" data-status={event.status}>
-              {STATUS_LABEL[event.status]}
+            <span className="pill" data-status={status}>
+              {STATUS_LABEL[status]}
             </span>
           </div>
         </div>
@@ -430,7 +461,11 @@ function EventPanel({
             <RollingNumber className="stat__value" value={stats.scored} />
             <span className="label">Scored all</span>
           </div>
-          {event.status === 'open' && results ? (
+          {/* Only while there is time left to show. A ring sitting at 00:00 in
+              its urgent colour reads as "hurry", which is the wrong thing to
+              say about a window that has already finished; the pill next to it
+              is what carries that news now. */}
+          {live && results ? (
             <CountdownRing
               initialSeconds={results.secondsRemaining}
               totalSeconds={event.windowSeconds}
@@ -484,17 +519,33 @@ function EventPanel({
             </button>
           ) : null}
 
+          {/* Still the same transition either way — `closed` is what unlocks
+              Reveal — but only one of the two takes anything away from anybody.
+              Cutting a window short costs the room the time it had left, so it
+              asks first; confirming the end of a window that has already run out
+              would be asking permission to agree with the clock. */}
           {event.status === 'open' ? (
-            <button
-              className="btn btn--danger"
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                if (window.confirm('Close voting early. Continue?')) void onStatus('closed')
-              }}
-            >
-              Close now
-            </button>
+            live ? (
+              <button
+                className="btn btn--danger"
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  if (window.confirm('Close voting early. Continue?')) void onStatus('closed')
+                }}
+              >
+                Close now
+              </button>
+            ) : (
+              <button
+                className="btn"
+                type="button"
+                disabled={busy}
+                onClick={() => void onStatus('closed')}
+              >
+                Close voting
+              </button>
+            )
           ) : null}
 
           {event.status === 'closed' ? (
@@ -590,7 +641,7 @@ function EventPanel({
       <div className="panel">
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <h2>Live tally</h2>
-          {event.status === 'open' ? <span className="label">Updates every 2s</span> : null}
+          {live ? <span className="label">Updates every 2s</span> : null}
         </div>
         {results ? (
           <>
@@ -605,7 +656,11 @@ function EventPanel({
             <ResultsBars
               tally={results.tally}
               maxScore={results.maxScore}
-              revealed={event.status !== 'open'}
+              // A leader is held back only while the tally can still change.
+              // Once the window has closed — by the button or by the clock —
+              // the standings are final and the organiser is the one person
+              // entitled to see them before the room does.
+              revealed={!live}
             />
           </>
         ) : (

@@ -34,4 +34,9 @@ export const STATUS_LABEL: Record<string, string> = {
   open: 'Voting open',
   closed: 'Closed',
   revealed: 'Revealed',
+  // Not one of the event's four statuses: the window ran out on its own and
+  // nobody has pressed Close yet. Worded as something that happened rather than
+  // something the organiser did, because they did not do it. See
+  // app/adminStatus.ts.
+  ended: 'Window ended',
 }
