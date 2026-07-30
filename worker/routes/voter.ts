@@ -38,6 +38,14 @@ async function currentVoter(request: Request, secret: string): Promise<VoterSess
  * `/api/current-event` exists so a QR code can point at the bare origin and
  * still reach the right ballot, which matters when the code is printed before
  * the event id is known.
+ *
+ * This is also the busiest endpoint of the event, and the reason it has to stay
+ * this cheap. Every phone on the vote page polls it for the whole time it is
+ * open — including while the event is still a draft, because being opened is the
+ * transition somebody waiting at check-in is waiting for. Two hundred phones on
+ * one venue wifi is what sets the intervals in app/voteWatch.ts, and one indexed
+ * row lookup with no joins and no counting is what makes those intervals
+ * affordable. Nothing that scales with the size of the room belongs here.
  */
 export async function getPublicEvent(
   _request: Request,
