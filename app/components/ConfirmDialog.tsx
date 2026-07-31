@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 
 /**
  * The confirmation for a decision that cannot be undone.
@@ -51,6 +51,14 @@ export function ConfirmDialog({
   // must never be the irreversible half.
   const cancelRef = useRef<HTMLButtonElement>(null)
 
+  // Per instance, not a constant. A closed dialog is still in the document — the
+  // element is always rendered and showModal/close is what opens it — so the
+  // dashboard holds two of these at once, and a hard-coded id meant both
+  // `aria-labelledby`s resolved to whichever heading came first in the DOM. A
+  // screen reader announced "Close voting now?" as "Open voting now?": the two
+  // most consequential taps in the app, wearing each other's names.
+  const titleId = useId()
+
   useEffect(() => {
     const dialog = ref.current
     if (!dialog) return
@@ -77,14 +85,14 @@ export function ConfirmDialog({
   }, [onCancel])
 
   return (
-    <dialog className="dialog" ref={ref} aria-labelledby="confirm-title">
+    <dialog className="dialog" ref={ref} aria-labelledby={titleId}>
       <div>
         {eyebrow ? (
           <span className="label" style={{ color: tone === 'danger' ? 'var(--danger)' : undefined }}>
             {eyebrow}
           </span>
         ) : null}
-        <h2 id="confirm-title">{title}</h2>
+        <h2 id={titleId}>{title}</h2>
       </div>
 
       <p>{body}</p>

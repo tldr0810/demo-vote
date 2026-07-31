@@ -7,7 +7,7 @@ import { Skeleton, SkeletonRows } from '../components/Skeleton'
 import { messageFor } from '../messages'
 import { gsap, motionOk, shake, useGSAP } from '../motion'
 import { codeFromSearch, stripCodeFromUrl } from '../voteUrl'
-import { pollIntervalFor, watchAction, type WatchedPhase } from '../voteWatch'
+import { BOOT_RETRY_MS, pollIntervalFor, watchAction, type WatchedPhase } from '../voteWatch'
 
 // The three screens in the middle are the ones the watcher has rules for, and
 // they are named there rather than here so the rules and the screens cannot
@@ -144,6 +144,7 @@ export function Vote({ eventId }: { eventId: string | null }) {
   // ballot with the scores they have already set.
   useEffect(() => {
     let cancelled = false
+    let retry = 0
 
     async function boot() {
       const path = eventId ? `/api/event/${eventId}` : '/api/current-event'
@@ -153,8 +154,24 @@ export function Vote({ eventId }: { eventId: string | null }) {
       if (!eventResult.ok) {
         setError(messageFor(eventResult.error))
         setPhase('unavailable')
+
+        // The one dead end on this page, and it is not a rare one: the watcher
+        // below needs an event to watch, so a phone that never got past this
+        // request would never ask a second question for the rest of the day.
+        // Two hundred people scanning at once is the likeliest moment for the
+        // wifi to drop the first one, and the person holding it has no reason to
+        // think refreshing is their job.
+        //
+        // Retried whatever went wrong, including EVENT_NOT_FOUND. On `/` that
+        // is not an error at all but a fact with a clock on it — nothing is
+        // scheduled *yet* — and a permanent QR on a wall is scanned before the
+        // organiser has finished setting the event up. On `/v/:id` a wrong id
+        // stays wrong and this costs it one small request every five seconds,
+        // which is the cheaper half of the trade.
+        retry = window.setTimeout(boot, BOOT_RETRY_MS)
         return
       }
+
       setEvent(eventResult.data)
 
       // Checked before anything to do with sessions. Once the organiser has
@@ -210,6 +227,7 @@ export function Vote({ eventId }: { eventId: string | null }) {
     void boot()
     return () => {
       cancelled = true
+      window.clearTimeout(retry)
     }
   }, [eventId, applyBallot, enterVoting])
 
@@ -557,7 +575,13 @@ export function Vote({ eventId }: { eventId: string | null }) {
           ? 'Voting is open. Your ballot is ready.'
           : phase === 'results'
             ? 'The results have been published.'
-            : phase === 'unavailable' && event?.status !== 'draft'
+            : // `event` is null when this page never resolved one, which is a
+              // third case and not a closed window. Read as `status !== 'draft'`
+              // on a null event, this announced "Voting has closed" to a screen
+              // reader about an event it knows nothing about — and now that the
+              // same screen says in text that it is still checking, the two would
+              // contradict each other.
+              phase === 'unavailable' && event !== null && event.status !== 'draft'
               ? 'Voting has closed.'
               : ''}
       </span>
@@ -614,12 +638,21 @@ export function Vote({ eventId }: { eventId: string | null }) {
           ) : (
             <>
               <h1>{event?.name ?? 'Vote'}</h1>
-              {/* An error is a dead end and gets the plain treatment. Waiting
-                  for the doors to open is not a dead end at all — this screen
-                  is polling and will move on by itself — so it gets the pulse,
-                  which is the only thing on it saying so. */}
+              {/* Both halves of this are now polling, so both say so. The pulse
+                  belongs to the one that is waiting for something expected —
+                  the doors opening — and the plain treatment to the one that is
+                  waiting for something to be put right. The second line is the
+                  whole difference between an error that has stopped and an error
+                  that is still trying: a phone that lost its first request to
+                  the wifi, and a wall QR scanned before the event existed, both
+                  land here and both recover on their own. */}
               {error ? (
-                <p>{error}</p>
+                <>
+                  <p>{error}</p>
+                  <p className="hint">
+                    This page keeps checking. Leave it open and it moves on by itself.
+                  </p>
+                </>
               ) : (
                 <div className="waiting">
                   <div className="waiting__pulse" aria-hidden="true">
