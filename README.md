@@ -69,7 +69,7 @@ are done".
    venue wifi puts every phone behind one NAT address, so the whole audience
    shares one limiter key. What makes guessing hopeless is the 6.6e11-wide
    keyspace, not the limit. See the arithmetic in `wrangler.toml`.
-3. **Print the slips.** "Print QR slips" opens `/admin/print/<eventId>`: one slip
+3. **Print the slips.** "Print slips" opens `/admin/print/<eventId>`: one slip
    per code, each with its own QR encoding `/v/<eventId>?c=<code>`, ready to cut
    up. Scanning one opens that person's ballot with nothing to type.
 
