@@ -24,11 +24,19 @@ export function EventPicker({
   options,
   value,
   onChange,
+  compact = false,
 }: {
   label: string
   options: PickerOption[]
   value: string
   onChange: (id: string) => void
+  /**
+   * Drops the visible label and the full-width box, for the copy that lives in
+   * the dashboard's top bar next to the sign-out button. The label becomes the
+   * button's accessible name instead of a line of text above it, so the control
+   * is named exactly as loudly as before and takes a fraction of the room.
+   */
+  compact?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
@@ -125,10 +133,11 @@ export function EventPicker({
   }
 
   return (
-    <div className="field" ref={wrapRef}>
+    <div className={compact ? 'picker-wrap' : 'field'} ref={wrapRef}>
       {/* A button is a labelable element, so this is a real label rather than
-          text that merely sits above the control. */}
-      <label id={labelId} htmlFor={buttonId}>
+          text that merely sits above the control. Hidden rather than dropped in
+          the compact copy: the name is still needed, just not on screen. */}
+      <label id={labelId} htmlFor={buttonId} className={compact ? 'visually-hidden' : undefined}>
         {label}
       </label>
 
@@ -136,7 +145,7 @@ export function EventPicker({
         <button
           type="button"
           id={buttonId}
-          className="input picker__button"
+          className={compact ? 'picker__button picker__button--compact' : 'input picker__button'}
           role="combobox"
           aria-expanded={open}
           aria-controls={listId}

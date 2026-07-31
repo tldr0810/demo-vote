@@ -274,6 +274,14 @@ p {
   letter-spacing: 0.22em;
 }
 
+/* A number that is a quantity, not a form field: it wants to be the width of
+   the number rather than the width of the panel. */
+.input--count {
+  width: 7rem;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ------------------------------------------------------------------ picker */
 
 /* The event picker is a listbox, not a native <select>: an open <select> is drawn
@@ -300,6 +308,39 @@ p {
 
 .picker__button[aria-expanded='true'] {
   border-color: var(--accent);
+}
+
+/* The copy that lives in the dashboard's top bar. Same control, sized like the
+   buttons beside it rather than like a form field, and without the label above
+   it — that becomes the button's accessible name instead. */
+/* Shrinkable, and the only thing in the app bar that is. The mark and sign out
+   are both fixed-width, so if this refused to give ground the bar overflowed and
+   took sign out off the right-hand edge of a phone with it. */
+.picker-wrap {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.picker__button--compact {
+  appearance: none;
+  width: 100%;
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* background-color, not the shorthand: the chevron is a background-image set
+     on .picker__button above, and a shorthand here would wipe it. */
+  background-color: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 0.8125rem;
+  padding: calc(var(--step) * 1) calc(var(--step) * 4) calc(var(--step) * 1)
+    calc(var(--step) * 2);
+  background-position: right calc(var(--step) * 1.5) center;
+  transition: border-color 140ms ease;
 }
 
 .picker__list {
@@ -394,6 +435,9 @@ p {
   line-height: 1.2;
   text-align: center;
   text-decoration: none;
+  /* A label is two or three words and belongs on one line. "Sign out" wrapping
+     to two in a narrow app bar makes the bar taller than the text in it. */
+  white-space: nowrap;
   cursor: pointer;
   background: var(--accent);
   color: var(--accent-ink);
@@ -442,6 +486,14 @@ p {
 .btn--sm {
   padding: calc(var(--step) * 1) calc(var(--step) * 2);
   font-size: 0.8125rem;
+}
+
+/* The one action a screen is for. Used for the single primary in the event bar
+   and for the two things a first-time organiser has to find: sign in, and
+   create an event. */
+.btn--lg {
+  padding: calc(var(--step) * 1.875) calc(var(--step) * 3.5);
+  font-size: 1rem;
 }
 
 /* ------------------------------------------------------------- demo cards */
@@ -784,19 +836,19 @@ p {
   align-items: center;
 }
 
-.stats {
+.panel__head {
   display: flex;
-  gap: calc(var(--step) * 4);
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--step);
 }
 
-.stat__value {
-  font-family: var(--mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 1.75rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  display: block;
+/* Secondary by construction: the things in here are reversible, rare, or both,
+   and they sit on the page rather than on a surface so they read as a footnote
+   to the panels above rather than as another one of them. */
+.panel--quiet {
+  background: transparent;
+  border-style: dashed;
 }
 
 .pill {
@@ -869,6 +921,638 @@ p {
   grid-template-columns: 2.5rem 1fr 1fr;
   gap: var(--step);
   align-items: center;
+}
+
+/* One field per line on a phone. Three columns inside 360px gives every name
+   field about 90px, which is not enough to see what you typed. */
+@media (max-width: 40rem) {
+  .demo-editor {
+    grid-template-columns: 2.5rem 1fr;
+  }
+
+  .demo-editor > .input:last-child {
+    grid-column: 2;
+  }
+}
+
+.demo-editor__slot {
+  color: var(--text-faint);
+  text-align: center;
+}
+
+/* -------------------------------------------------------------- dashboard */
+
+/*
+ * The organiser's screens are the only ones in this app that are operated
+ * rather than read, and they are operated from two quite different machines:
+ * a laptop at the desk, and a phone held at the side of the stage. Both are
+ * built from the same DOM below — the two-column grid folds into one column of
+ * tabbed panes, and the row of actions unpins itself from the event bar and
+ * becomes a bar under the thumb.
+ *
+ * 62rem is the one breakpoint that matters: it is where two columns of panels
+ * stop having room for the tally's bars and their labels side by side.
+ */
+
+/* Deliberately not sticky. It holds the app's name, the event picker and sign
+   out: three things nobody needs while scrolling a dashboard. The bar below it
+   is the one that has to stay. */
+.appbar {
+  display: flex;
+  align-items: center;
+  gap: var(--step);
+  max-width: var(--shell-wide);
+  margin: 0 auto;
+  padding: calc(var(--step) * 1.5) calc(var(--step) * 2.5);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.appbar__mark {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 0.9375rem;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  flex: none;
+}
+
+.appbar__mark > span {
+  color: var(--accent);
+}
+
+.appbar__spacer {
+  flex: 1;
+  /* Nothing but slack: it must be the first thing to disappear when the picker
+     and sign out need the room. */
+  min-width: 0;
+}
+
+/* The word "Organiser" is a reassurance, not a control. First thing to go. */
+@media (max-width: 34rem) {
+  .appbar__role {
+    display: none;
+  }
+
+  .appbar {
+    padding-inline: calc(var(--step) * 2);
+  }
+}
+
+/* --------------------------------------------------------------- event bar */
+
+/*
+ * One sticky block, not three stacked sticky elements.
+ *
+ * Each of those would have to be told the height of everything above it, and
+ * none of those heights is a constant: a long event name wraps to two lines on
+ * a phone and to one on a laptop, and a browser set to larger text moves all of
+ * them at once. Every such offset is a number that is right on the machine it
+ * was measured on.
+ */
+.topbars {
+  position: sticky;
+  top: 0;
+  z-index: 14;
+  max-width: var(--shell-wide);
+  margin: 0 auto;
+  background: var(--bg);
+}
+
+.eventbar {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--step) * 3);
+  padding: calc(var(--step) * 2.5);
+  border-bottom: 1px solid var(--line);
+}
+
+.eventbar__id {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 0.75);
+  min-width: 0;
+}
+
+.eventbar__name {
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  font-weight: 620;
+  margin: 0;
+  /* Two lines, then an ellipsis. An organiser who names an event after the
+     quarter, the team and the venue should not push the countdown off screen. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.eventbar__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--step);
+}
+
+.eventbar__clock {
+  padding-left: calc(var(--step) * 3);
+  border-left: 1px solid var(--line);
+  flex: none;
+}
+
+/* Bigger here than on a ballot. This is the number an organiser looks up at
+   from across a desk, and it is the only reason the bar is sticky. */
+.eventbar .countdown__value {
+  font-size: 1.5rem;
+  line-height: 1.1;
+}
+
+.eventbar__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--step);
+  flex: none;
+}
+
+@media (max-width: 62rem) {
+  .eventbar {
+    gap: calc(var(--step) * 2);
+    padding: calc(var(--step) * 2);
+  }
+
+  .eventbar__clock {
+    padding-left: calc(var(--step) * 2);
+  }
+
+  /* Off the bar and under the thumb. The primary action is pressed once per
+     event, but it is pressed at the moment somebody is talking to a room, and
+     hunting for it at the top of a scrolled page is the wrong time to be
+     looking at a screen at all. */
+  .eventbar__actions {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 16;
+    margin: 0;
+    padding: calc(var(--step) * 1.5) calc(var(--step) * 2)
+      calc(var(--step) * 2 + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line);
+  }
+
+  /* The one that matters takes the room; New event stays a ghost beside it. */
+  .eventbar__actions > .btn:first-child {
+    flex: 1;
+  }
+
+  .eventbar__new {
+    flex: none;
+  }
+}
+
+/* --------------------------------------------------------------------- tabs */
+
+.tabs {
+  display: none;
+}
+
+@media (max-width: 62rem) {
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: calc(var(--step) * 1.5) calc(var(--step) * 2);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .tab {
+    flex: 1;
+    appearance: none;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    padding: calc(var(--step) * 1) 0;
+    font-family: var(--sans);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 140ms ease, color 140ms ease;
+  }
+
+  .tab[aria-selected='true'] {
+    background: var(--surface-raised);
+    border-color: var(--line-strong);
+    color: var(--text);
+  }
+}
+
+/* ---------------------------------------------------------------- the grid */
+
+.dash {
+  display: grid;
+  /* The tally gets the wider half: its rows carry a name, a bar, a total and an
+     average, and it is the half anybody is actually watching. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: calc(var(--step) * 2.5);
+  max-width: var(--shell-wide);
+  margin: 0 auto;
+  padding: calc(var(--step) * 2.5) calc(var(--step) * 2.5) calc(var(--step) * 8);
+  align-items: start;
+}
+
+.dash__col,
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 2.5);
+  min-width: 0;
+}
+
+@media (max-width: 62rem) {
+  .dash {
+    grid-template-columns: minmax(0, 1fr);
+    /* Clear of the fixed action bar. */
+    padding-bottom: calc(var(--step) * 12 + env(safe-area-inset-bottom));
+  }
+
+  /* The columns stop being columns and let their panes become the grid's own
+     children, so one pane can be shown without an empty column beside it. */
+  .dash__col {
+    display: contents;
+  }
+
+  .pane {
+    display: none;
+  }
+
+  .dash[data-pane='tally'] .pane[data-pane='tally'],
+  .dash[data-pane='turnout'] .pane[data-pane='turnout'],
+  .dash[data-pane='codes'] .pane[data-pane='codes'] {
+    display: flex;
+  }
+}
+
+/* Lets an error sit in the same column as everything else without a panel. */
+.shell--flush {
+  max-width: var(--shell-wide);
+  margin: 0 auto;
+  padding: var(--step) calc(var(--step) * 2.5) 0;
+  min-height: 0;
+}
+
+/* ------------------------------------------------------------------ funnel */
+
+/*
+ * Issued, redeemed, scored. These were three numbers in a row, which left the
+ * relationship between them — the only interesting thing about them — to be
+ * worked out by whoever was reading.
+ */
+.funnel {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 1.75);
+}
+
+.funnel__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--step);
+  align-items: baseline;
+}
+
+.funnel__name {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.funnel__figure {
+  display: flex;
+  align-items: baseline;
+  gap: var(--step);
+}
+
+.funnel__value {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.5rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.funnel__pct {
+  font-size: 0.75rem;
+  color: var(--text-faint);
+}
+
+.funnel__track {
+  grid-column: 1 / -1;
+  height: 6px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.funnel__fill {
+  height: 100%;
+  background: var(--accent-dim);
+  border-radius: 999px;
+  transition: width 400ms ease;
+}
+
+/* The last step, and the only one that is a result rather than a stage. */
+.funnel__row[data-lead='true'] .funnel__fill {
+  background: var(--accent);
+}
+
+/* ---------------------------------------------------------------- callout */
+
+/* Something to act on while there is still time to act. Shares its shape with
+   .ballotstatus, which is the voter's version of the same idea. */
+.callout {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius-input);
+  background: var(--bg);
+  padding: calc(var(--step) * 1.5) calc(var(--step) * 2);
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.callout strong {
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------------- share */
+
+.share {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: calc(var(--step) * 2.5);
+  align-items: start;
+}
+
+.share__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--step);
+  min-width: 0;
+}
+
+/* Smaller than the print sheet's, which has to survive being photographed off a
+   piece of paper. This one is scanned off a screen a metre away. */
+.share .qr {
+  width: 140px;
+  height: 140px;
+}
+
+@media (max-width: 30rem) {
+  .share {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.urlbox {
+  display: flex;
+  align-items: center;
+  gap: var(--step);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-input);
+  padding: calc(var(--step) * 0.75) calc(var(--step) * 0.75) calc(var(--step) * 0.75)
+    calc(var(--step) * 1.5);
+}
+
+.urlbox > code {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ----------------------------------------------------------------- explain */
+
+/* The paragraph that matters the first time somebody sets this up and never
+   again. Folded away rather than deleted. */
+.explain {
+  border-top: 1px solid var(--line);
+  padding-top: calc(var(--step) * 1.5);
+}
+
+.explain > summary {
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: var(--text-faint);
+  list-style: none;
+}
+
+.explain > summary::-webkit-details-marker {
+  display: none;
+}
+
+.explain > summary::before {
+  content: '+ ';
+  font-family: var(--mono);
+}
+
+.explain[open] > summary::before {
+  content: '– ';
+}
+
+.explain > p {
+  margin-top: var(--step);
+  font-size: 0.8125rem;
+  color: var(--text-faint);
+}
+
+/* ----------------------------------------------------------------- livedot */
+
+/* Says the number next to it is arriving on its own. Without it a tally that
+   happens not to be moving is indistinguishable from one that has stopped
+   being fetched. */
+.livedot {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.livedot::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: livedot-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes livedot-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* ------------------------------------------------------------------- empty */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(var(--step) * 1.5);
+  padding-top: calc(var(--step) * 6);
+}
+
+.empty > h1 {
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------- sign in */
+
+/*
+ * The organiser's front door, and the only screen in this app somebody meets
+ * before they know what it is.
+ *
+ * It was a password field on an otherwise empty page, pinned to the top-left of
+ * a 72rem column. Two halves instead: what this thing is, and the way in. On a
+ * phone they stack, brand first — the person signing in on their own device at
+ * the back of a room is the likeliest one never to have seen this before.
+ */
+.auth {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.auth__brand {
+  display: flex;
+  flex-direction: column;
+  /* Centred rather than spread. Pinning the steps to the bottom of the column
+     leaves a screen's worth of nothing between them and the paragraph they
+     follow on a tall display, and reads as a layout that lost something. */
+  justify-content: center;
+  gap: calc(var(--step) * 5);
+  padding: calc(var(--step) * 6);
+  border-right: 1px solid var(--line);
+  /* The only gradient in the app. It is doing the job a photograph would do on
+     a marketing page and the job nothing was doing here before: giving the half
+     of the screen that carries no controls a reason to be looked at. Anchored
+     bottom-left so it reads as light coming into the corner rather than as a
+     band across the middle. */
+  background:
+    radial-gradient(
+      120% 90% at 0% 100%,
+      color-mix(in srgb, var(--accent) 12%, transparent),
+      transparent 62%
+    ),
+    var(--surface);
+}
+
+.auth__brandhead {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 1.5);
+}
+
+.auth__mark {
+  font-family: var(--mono);
+  font-size: clamp(2rem, 3.4vw, 3rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  margin: 0;
+}
+
+.auth__mark > span {
+  color: var(--accent);
+}
+
+.auth__blurb {
+  max-width: 36ch;
+  font-size: 0.9375rem;
+}
+
+/* Numbered because it is a sequence: each step is only possible once the one
+   above it is done, and an organiser reading this has not done any of them. */
+.auth__steps {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 1.25);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.auth__steps > li {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+  gap: var(--step);
+  align-items: baseline;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.auth__steps b {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+.auth__form {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  justify-self: center;
+  gap: calc(var(--step) * 2.5);
+  width: min(27rem, 100%);
+  padding: calc(var(--step) * 6);
+}
+
+.auth__form > div > h1 {
+  font-size: clamp(1.5rem, 3vw, 1.875rem);
+  margin: calc(var(--step) * 0.5) 0 0;
+}
+
+@media (max-width: 52rem) {
+  .auth {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 100dvh;
+  }
+
+  .auth__brand {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: calc(var(--step) * 5) calc(var(--step) * 2.5) calc(var(--step) * 4);
+    gap: calc(var(--step) * 3);
+  }
+
+  .auth__form {
+    padding: calc(var(--step) * 4) calc(var(--step) * 2.5) calc(var(--step) * 8);
+    width: 100%;
+  }
+
+  /* Tighter, and one line each. The four steps are orientation for a first-time
+     organiser and they should not push the password field two screens down for
+     everybody else. */
+  .auth__steps {
+    gap: var(--step);
+  }
+
+  .auth__blurb {
+    font-size: 0.875rem;
+  }
 }
 
 /* --------------------------------------------------------------- skeleton */

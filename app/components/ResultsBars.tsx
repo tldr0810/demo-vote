@@ -18,12 +18,24 @@ export function ResultsBars({
   tally,
   maxScore,
   revealed,
+  ranked = true,
   fillDelay = 0,
 }: {
   tally: TallyRow[]
   /** Top of the scoring scale, from the server. Bars are drawn against it. */
   maxScore: number
   revealed: boolean
+  /**
+   * Whether there is a ranking to show yet.
+   *
+   * False before the first complete ballot, when every demo is on zero and so
+   * every demo is joint first. That is arithmetically true and reads as a bug:
+   * an organiser watching a dashboard before the doors open sees the number 01
+   * six times down the left of the list. The demos are numbered by their slot
+   * instead, which is what they are called on the ballot and on the running
+   * order, and the column becomes a ranking as soon as there is one.
+   */
+  ranked?: boolean
   /**
    * Holds the bars at zero for this many seconds before they grow.
    *
@@ -103,7 +115,9 @@ export function ResultsBars({
             className={`result${isLeader ? ' result--leader' : ''}`}
             data-flip-id={row.demoId}
           >
-            <span className="result__rank num">{String(row.rank).padStart(2, '0')}</span>
+            <span className="result__rank num">
+              {String(ranked ? row.rank : row.slot).padStart(2, '0')}
+            </span>
             <div className="result__body">
               <div className="result__name">{row.name}</div>
               {row.team ? <div className="demo__team">{row.team}</div> : null}
