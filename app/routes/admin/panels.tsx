@@ -12,7 +12,7 @@ import { RollingNumber } from '../../components/RollingNumber'
 import { SkeletonRows } from '../../components/Skeleton'
 import { VoteQr } from '../../components/VoteQr'
 import { adminPrintPath } from '../../adminRoute'
-import type { DashboardStatus } from '../../adminStatus'
+import { codesCanStillBeUsed, type DashboardStatus } from '../../adminStatus'
 
 type Toast = (label: string, detail?: string) => void
 
@@ -194,17 +194,26 @@ export function CodesPanel({
   event,
   busy,
   issued,
+  status,
   onGenerate,
   onToast,
 }: {
   event: AdminEvent
   busy: boolean
   issued: number
+  status: DashboardStatus
   onGenerate: (count: number) => Promise<unknown>
   onToast: Toast
 }) {
   const [count, setCount] = useState(100)
   const [generated, setGenerated] = useState<string[] | null>(null)
+
+  // Once the window has shut, a code generated here cannot be redeemed by
+  // anybody. Generating stays available — it is not harmful, and an organiser
+  // who wants a batch for a reprint should not be argued with — but it stops
+  // being drawn as the primary action, because on a revealed event it was the
+  // loudest thing on the dashboard and the one thing on it that does nothing.
+  const usable = codesCanStillBeUsed(status)
 
   return (
     <section className="panel">
@@ -212,6 +221,13 @@ export function CodesPanel({
         <h2>Voting codes</h2>
         <span className="hint num">{issued} issued</span>
       </div>
+
+      {!usable ? (
+        <p className="hint">
+          Voting is over, so a new code cannot be redeemed. The sheet and the CSV are still here for
+          the record.
+        </p>
+      ) : null}
 
       <div className="row">
         <input
@@ -224,7 +240,7 @@ export function CodesPanel({
           onChange={(changed) => setCount(Number(changed.target.value))}
         />
         <button
-          className="btn"
+          className={usable ? 'btn' : 'btn btn--ghost'}
           type="button"
           disabled={busy}
           data-busy={busy}
@@ -279,6 +295,19 @@ export function CodesPanel({
 
 /* -------------------------------------------------------------------- tally */
 
+/**
+ * "Live tally" was the heading in every state, including the ones where nothing
+ * about it is live. On a revealed event it sat above a set of final numbers with
+ * the "updating every 2s" badge correctly absent, which is the panel telling the
+ * organiser two different things at once.
+ */
+function tallyHeading(status: DashboardStatus): string {
+  if (status === 'open') return 'Live tally'
+  // Nothing has been counted and nothing is going to be until voting opens.
+  if (status === 'draft') return 'Tally'
+  return 'Final standings'
+}
+
 export function TallyPanel({
   results,
   status,
@@ -291,7 +320,7 @@ export function TallyPanel({
   return (
     <section className="panel">
       <div className="panel__head">
-        <h2>Live tally</h2>
+        <h2>{tallyHeading(status)}</h2>
         {live ? <span className="livedot">Updating every 2s</span> : null}
       </div>
 

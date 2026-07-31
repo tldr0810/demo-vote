@@ -209,6 +209,7 @@ export function EventDashboard({
               event={event}
               busy={busy}
               issued={stats.issued}
+              status={status}
               onGenerate={onGenerate}
               onToast={onToast}
             />

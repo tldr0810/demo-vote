@@ -46,11 +46,13 @@ export function CreateEvent({
 
   return (
     <div className="stack">
+      {/* One Cancel, at the bottom next to Create event. There was a second one
+          up here, which is two controls with one intent: whichever an organiser
+          reaches for, the question it answers is the same, and the pair reads as
+          though one of them must do something else. The decision is made at the
+          bottom of the form, so that is where the way out of it lives. */}
       <div className="eyebrow">
         <span className="label">New event</span>
-        <button className="btn btn--ghost btn--sm" type="button" onClick={onDone}>
-          Cancel
-        </button>
       </div>
 
       <h1>Set up an event</h1>

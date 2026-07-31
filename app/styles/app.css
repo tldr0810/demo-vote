@@ -1887,11 +1887,28 @@ p {
     grid-column: 1 / -1;
     justify-content: flex-start;
     gap: calc(var(--step) * 2.5);
+    /* Three figures wrap to a second line rather than being squeezed onto one.
+       On a 390px phone the featured row put them beside "Open dashboard", and
+       with the cells free to shrink below their own labels the words ran
+       together into ISSUEDREDEEMEDBALLOTS with the numbers no longer over the
+       word they belong to. */
+    flex-wrap: wrap;
   }
 
   .evrow__stats > span {
     align-items: flex-start;
-    min-width: 0;
+    /* Not min-width: 0. A figure and its label are one unit and the label is
+       the wider half of it, so letting the cell shrink below the label is
+       letting two labels touch. */
+    flex: none;
+  }
+
+  /* Its own line, under the counts. It is the row's action and it was sharing a
+     line with them only because the pill's grid-column: 2 conjures an implicit
+     second column that the button was then auto-placed into. */
+  .evrow--feature .evrow__go {
+    grid-column: 1 / -1;
+    justify-self: start;
   }
 
   .evrow__manage {
