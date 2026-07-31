@@ -64,6 +64,15 @@
      clock keeps the colour it was tuned for. */
   --danger-ink: #16181b;
 
+  /* The fifth status pill, and the only hue in the app that is neither the
+     accent nor the clock. The palette had one accent and two clock colours,
+     which left `revealed` sharing amber with `ended` and `closed` sharing the
+     default grey with `draft`: five statuses wearing three faces on the event
+     list. This breaks that tie and does nothing else — it is never used for
+     anything interactive, so it stays out of the way of the rule that the accent
+     is what the voter touches and amber is what the clock is doing. */
+  --info: #9aa8ff;
+
   --radius-surface: 14px;
   --radius-input: 10px;
 
@@ -122,6 +131,10 @@
     --warn: #965e04;
     --danger: #c0392b;
     --danger-ink: #ffffff;
+    /* Deep rather than pale, for the same reason as --accent: 11px uppercase
+       text on white has to clear 4.5:1, and no periwinkle light enough to read
+       as the dark theme's does. Same hue family, opposite end of it. */
+    --info: #4f46c9;
   }
 }
 
@@ -1167,14 +1180,26 @@ p {
   color: var(--text-muted);
 }
 
+/* One face per status, in the order an event moves through them.
+ *
+ * There were three faces for five statuses: draft and closed both fell through
+ * to the base grey, and revealed and ended were both amber. On a list of twenty
+ * events that is two pairs of rows that cannot be told apart without reading
+ * them, which is exactly the moment — the organiser scanning for the one to
+ * open — when nobody is reading. The label is still the source of truth; colour
+ * only has to get the eye to the right row. */
+
+/* Nothing has been decided yet. The quietest pill in the set and the only
+   dashed one: a draft is an outline of an event, so it is drawn as an outline
+   that has not been committed to. */
+.pill[data-status='draft'] {
+  color: var(--text-faint);
+  border-style: dashed;
+}
+
 .pill[data-status='open'] {
   color: var(--accent);
   border-color: var(--accent);
-}
-
-.pill[data-status='revealed'] {
-  color: var(--warn);
-  border-color: var(--warn);
 }
 
 /* The window ran out by itself and is waiting on the organiser. Warn rather
@@ -1184,6 +1209,24 @@ p {
 .pill[data-status='ended'] {
   color: var(--warn);
   border-color: var(--warn);
+}
+
+/* Voting is over and the organiser is the one who ended it. Filled rather than
+   outlined, and neutral rather than red: this is an ordinary end state, not a
+   failure, and red in this app means the clock is running out. The fill is what
+   separates it from draft, which is the other pill with no hue of its own. */
+.pill[data-status='closed'] {
+  background: var(--line-strong);
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+/* The standings are up. Off --warn, which it used to share with `ended`: amber
+   there means the organiser still has something to do, and a revealed event is
+   the one state where they do not. */
+.pill[data-status='revealed'] {
+  color: var(--info);
+  border-color: var(--info);
 }
 
 /* The QR sits on its own white card in both themes. A dark-mode QR does not
@@ -1273,6 +1316,10 @@ p {
   border-bottom: 1px solid var(--line);
 }
 
+/* A link to the event list, drawn as the wordmark it already was: inheriting
+   the bar's text colour and carrying no underline, because a logo that arrives
+   underlined reads as a mistake. The affordance is the hover, and the focus ring
+   is the global one. */
 .appbar__mark {
   font-family: var(--mono);
   font-weight: 700;
@@ -1280,6 +1327,13 @@ p {
   letter-spacing: -0.02em;
   white-space: nowrap;
   flex: none;
+  color: inherit;
+  text-decoration: none;
+  transition: color 140ms ease;
+}
+
+.appbar__mark:hover {
+  color: var(--accent);
 }
 
 .appbar__mark > span {
