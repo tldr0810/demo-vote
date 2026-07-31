@@ -3,8 +3,9 @@ import { api, type Ballot, type PublicEvent, type ScoreSaved, type TallyRow } fr
 import { CountdownRing } from '../components/CountdownRing'
 import { DemoCard } from '../components/DemoCard'
 import { ResultsBars } from '../components/ResultsBars'
+import { Skeleton, SkeletonRows } from '../components/Skeleton'
 import { messageFor } from '../messages'
-import { gsap, motionOk, useGSAP } from '../motion'
+import { gsap, motionOk, shake, useGSAP } from '../motion'
 import { codeFromSearch, stripCodeFromUrl } from '../voteUrl'
 import { pollIntervalFor, watchAction, type WatchedPhase } from '../voteWatch'
 
@@ -217,6 +218,65 @@ export function Vote({ eventId }: { eventId: string | null }) {
   const savedCount = Object.keys(saved).length
   const complete = demoCount > 0 && savedCount >= demoCount
 
+  // The first demo with no confirmed score. What "Next unscored" goes to, and
+  // null exactly when the ballot is complete.
+  const nextUnscored = ballot?.demos.find((demo) => saved[demo.id] === undefined) ?? null
+
+  /**
+   * Takes the voter to the demo they have not scored.
+   *
+   * Six cards is already more than a phone shows at once and the line-up can be
+   * twenty. Somebody who scrolled past one has no way of knowing which one
+   * without going back over all of them, and the counter tells them there is a
+   * missing score without saying whose.
+   *
+   * Focus follows the scroll, not just the viewport: a ballot filled in from a
+   * keyboard has the same problem and none of the scrolling.
+   */
+  const goToNextUnscored = useCallback(() => {
+    if (!nextUnscored) return
+    const card = document.getElementById(`demo-${nextUnscored.id}`)
+    if (!card) return
+    card.scrollIntoView({ behavior: motionOk() ? 'smooth' : 'auto', block: 'center' })
+    card.querySelector<HTMLButtonElement>('.rating__option')?.focus({ preventScroll: true })
+  }, [nextUnscored])
+
+  // Marks the transition into a countable ballot, and only that transition.
+  // Held in refs because they are facts about the previous render rather than
+  // things to render from: `complete` says the ballot counts now, and these are
+  // what make the difference between "counts" and "has just started counting".
+  const wasComplete = useRef(false)
+  // The first sight of the ballot is not a transition. Somebody who scored
+  // everything and then reloaded — or came back to the tab — arrives complete,
+  // and buzzing their phone to congratulate them on work they did ten minutes
+  // ago is a notification, not a confirmation.
+  const primed = useRef(false)
+  const [justCompleted, setJustCompleted] = useState(false)
+
+  useEffect(() => {
+    if (phase !== 'ballot') return
+
+    if (!primed.current) {
+      primed.current = true
+      wasComplete.current = complete
+      return
+    }
+
+    const crossed = complete && !wasComplete.current
+    wasComplete.current = complete
+    if (!crossed) return
+
+    // The one thing a voter does on this page that is worth marking. A short
+    // buzz because the confirmation is at the bottom of the screen and their
+    // eyes are on a stage; a phone that cannot vibrate ignores this, and a
+    // desktop browser has no such method at all.
+    if (motionOk()) navigator.vibrate?.(18)
+
+    setJustCompleted(true)
+    const timer = window.setTimeout(() => setJustCompleted(false), 700)
+    return () => window.clearTimeout(timer)
+  }, [complete, phase])
+
   // Every phone that is on this event and not already showing the standings.
   //
   // The closed screen is the obvious one. The entry screen and the ballot are
@@ -356,13 +416,7 @@ export function Vote({ eventId }: { eventId: string | null }) {
       setBusy(false)
       setError(messageFor(result.error))
       // A wrong code should feel wrong before it is read.
-      if (motionOk()) {
-        gsap.fromTo(
-          entryCardRef.current,
-          { x: -9 },
-          { x: 0, duration: 0.5, ease: 'elastic.out(1, 0.32)', clearProps: 'x' },
-        )
-      }
+      shake(entryCardRef.current)
       return
     }
 
@@ -493,7 +547,28 @@ export function Vote({ eventId }: { eventId: string | null }) {
 
   return (
     <div className="shell" ref={rootRef}>
-      {phase === 'loading' ? <p className="label">Loading</p> : null}
+      {/* Says what just happened on a screen that changed by itself.
+          A phone left on this page moves from waiting to the ballot to the
+          standings without anybody touching it, and a voter who is not looking
+          at it — which is the whole point of leaving it open — otherwise gets no
+          word of any of it. Polite, and only ever one sentence long. */}
+      <span className="visually-hidden" role="status" aria-live="polite">
+        {phase === 'ballot'
+          ? 'Voting is open. Your ballot is ready.'
+          : phase === 'results'
+            ? 'The results have been published.'
+            : phase === 'unavailable' && event?.status !== 'draft'
+              ? 'Voting has closed.'
+              : ''}
+      </span>
+
+      {phase === 'loading' ? (
+        <div className="stack" aria-busy="true">
+          <Skeleton height="1.75rem" width="60%" />
+          <Skeleton height="3rem" width="80%" />
+          <SkeletonRows rows={3} height="8rem" />
+        </div>
+      ) : null}
 
       {phase === 'unavailable' ? (
         <div className="stack">
@@ -511,17 +586,26 @@ export function Vote({ eventId }: { eventId: string | null }) {
               <div className="receipt__mark" aria-hidden="true">
                 ✓
               </div>
-              <h2>Your scores are in</h2>
-              <p style={{ margin: '0 auto' }}>
+              <h2>Your ballot counts</h2>
+              <p>
                 You scored all {demoCount} demos. The standings appear here the moment the
                 organisers publish them, and on the big screen at the same time. Leave this page
                 open.
               </p>
+              {/* The ballot is behind them now and this is the only record of
+                  what they gave. */}
+              <div className="myscores">
+                {ballot?.demos.map((demo) => (
+                  <span key={demo.id}>
+                    {String(demo.slot).padStart(2, '0')} <strong>{saved[demo.id]}</strong>
+                  </span>
+                ))}
+              </div>
             </div>
           ) : demoCount > 0 ? (
             <div className="receipt">
               <h2>Voting has closed</h2>
-              <p style={{ margin: '0 auto' }}>
+              <p>
                 You scored {savedCount} of {demoCount} demos. A ballot counts only once every demo
                 has a score, so this one was not included. The standings still appear here when the
                 organisers publish them.
@@ -530,12 +614,27 @@ export function Vote({ eventId }: { eventId: string | null }) {
           ) : (
             <>
               <h1>{event?.name ?? 'Vote'}</h1>
-              <p>
-                {error ??
-                  (event?.status === 'draft'
-                    ? 'Voting has not opened yet. Leave this page open — it takes you to your ballot by itself the moment the organisers open voting.'
-                    : 'Voting has closed. The results appear here as soon as the organisers publish them.')}
-              </p>
+              {/* An error is a dead end and gets the plain treatment. Waiting
+                  for the doors to open is not a dead end at all — this screen
+                  is polling and will move on by itself — so it gets the pulse,
+                  which is the only thing on it saying so. */}
+              {error ? (
+                <p>{error}</p>
+              ) : (
+                <div className="waiting">
+                  <div className="waiting__pulse" aria-hidden="true">
+                    <span />
+                  </div>
+                  <h2>
+                    {event?.status === 'draft' ? 'Voting opens shortly' : 'Voting has closed'}
+                  </h2>
+                  <p>
+                    {event?.status === 'draft'
+                      ? 'Leave this page open. It takes you to your ballot by itself the moment the organisers open voting — there is nothing to refresh.'
+                      : 'The standings appear here as soon as the organisers publish them, and on the big screen at the same time.'}
+                  </p>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -620,32 +719,6 @@ export function Vote({ eventId }: { eventId: string | null }) {
             often as you like — scores save as you set them and stay editable until voting closes.
           </p>
 
-          {/* The one line that stops autosave from misleading anybody. Every
-              card says "Saved" the moment it is scored, which on its own reads
-              as "you are done"; a ballot missing even one demo is not counted at
-              all, so the fraction and what it means have to be on screen the
-              whole time, not just at the end. */}
-          <div
-            className="ballotstatus"
-            data-complete={complete}
-            role="status"
-            aria-live="polite"
-          >
-            {complete ? (
-              <>
-                <strong>All {demoCount} scored.</strong> Your ballot counts. You can still adjust
-                any score until voting closes.
-              </>
-            ) : (
-              <>
-                <strong>
-                  {savedCount} of {demoCount} scored.
-                </strong>{' '}
-                A ballot counts only once every demo has a score.
-              </>
-            )}
-          </div>
-
           <ul className="ballot">
             {ballot.demos.map((demo) => (
               <DemoCard
@@ -663,6 +736,51 @@ export function Vote({ eventId }: { eventId: string | null }) {
           <div className="error" role="alert">
             {error}
           </div>
+
+          {/* The one line that stops autosave from misleading anybody. Every
+              card says "Saved" the moment it is scored, which on its own reads
+              as "you are done"; a ballot missing even one demo is not counted at
+              all, so the fraction and what it means have to be on screen the
+              whole time, not just at the end. Pinned rather than placed, because
+              "the whole time" and "at the top of a page ten cards long" are not
+              the same thing. */}
+          <div
+            className="progress"
+            data-complete={complete}
+            data-just-completed={justCompleted}
+          >
+            <div className="progress__line" role="status" aria-live="polite">
+              {complete ? (
+                <span>
+                  <strong>All {demoCount} scored.</strong> Your ballot counts — change any score
+                  until voting closes.
+                </span>
+              ) : (
+                <span>
+                  <strong>
+                    {savedCount} of {demoCount} scored.
+                  </strong>{' '}
+                  Every demo must be scored to count.
+                </span>
+              )}
+
+              {nextUnscored ? (
+                <button className="btn btn--sm" type="button" onClick={goToNextUnscored}>
+                  Next unscored
+                </button>
+              ) : null}
+            </div>
+
+            <div className="progress__track" aria-hidden="true">
+              {ballot.demos.map((demo) => (
+                <span
+                  className="progress__seg"
+                  key={demo.id}
+                  data-on={saved[demo.id] !== undefined}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -675,8 +793,18 @@ export function Vote({ eventId }: { eventId: string | null }) {
           <h1 data-anim="results-head">Results</h1>
           <p data-anim="results-head">
             {results.ballots} {results.ballots === 1 ? 'ballot' : 'ballots'} counted.
+            {savedCount > 0 ? ' Your own scores are marked.' : ''}
           </p>
-          <ResultsBars tally={results.tally} maxScore={results.maxScore} revealed />
+          <ResultsBars
+            tally={results.tally}
+            maxScore={results.maxScore}
+            revealed
+            ranked={results.ballots > 0}
+            // Only on this screen. The projector and the dashboard show these
+            // rows to a room; this is the one copy being read by the person who
+            // chose the numbers.
+            mine={savedCount > 0 ? saved : undefined}
+          />
         </div>
       ) : null}
     </div>

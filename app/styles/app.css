@@ -42,9 +42,10 @@
      theme. It is --text-muted in both. */
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7' viewBox='0 0 11 7'%3E%3Cpath d='M1 1.25 5.5 5.75 10 1.25' fill='none' stroke='%238d929a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
-  /* Lifts the open picker off the panel behind it. Heavier here than in light
-     mode, where a dark surface cannot do the separating on its own. */
-  --picker-shadow: 0 12px 32px rgb(0 0 0 / 0.45);
+  /* Lifts anything that pops over the page — the open picker, a dialog, a toast
+     — off the surface behind it. Heavier here than in light mode, where a dark
+     surface cannot do the separating on its own. */
+  --shadow-pop: 0 12px 32px rgb(0 0 0 / 0.45);
 
   --accent: #46d98a;
   --accent-ink: #06120b;
@@ -74,14 +75,29 @@
     'Noto Sans TC', 'PingFang TC', sans-serif;
 
   --step: 8px;
+  /* A phone held in one hand, and a laptop running the event. Everything a
+     voter sees is the narrow one; only the dashboard and the print sheet ever
+     want the wide one.
+
+     There is no breakpoint token, and there cannot be: custom properties are
+     not readable from a media query. The two the dashboard uses are written out
+     at their own rules and named in a comment there. */
   --shell: 34rem;
+  --shell-wide: 76rem;
 }
 
 @media (prefers-color-scheme: light) {
   :root {
     --bg: #f4f3f0;
     --surface: #ffffff;
-    --surface-raised: #ffffff;
+    /* Was #ffffff, identical to --surface, which left every surface that means
+       "raised" indistinguishable from the one it sits on. The open picker got
+       away with it because it also carries a border and a shadow; the scored
+       demo card did not, so on the light side scoring a demo changed nothing
+       about the card's fill at all. A warm tint rather than a shadow: the fill
+       is what the dark theme uses, and the two themes should be saying the same
+       thing in their own palettes. */
+    --surface-raised: #f6f4ef;
     --line: #e0ded8;
     --line-strong: #c8c5bd;
 
@@ -91,7 +107,7 @@
 
     --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7' viewBox='0 0 11 7'%3E%3Cpath d='M1 1.25 5.5 5.75 10 1.25' fill='none' stroke='%235c6067' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
-    --picker-shadow: 0 10px 28px rgb(22 24 27 / 0.14);
+    --shadow-pop: 0 10px 28px rgb(22 24 27 / 0.14);
 
     --accent: #0e7a4b;
     --accent-ink: #ffffff;
@@ -163,7 +179,7 @@ body {
 }
 
 .shell--wide {
-  max-width: 72rem;
+  max-width: var(--shell-wide);
 }
 
 .stack {
@@ -258,6 +274,14 @@ p {
   letter-spacing: 0.22em;
 }
 
+/* A number that is a quantity, not a form field: it wants to be the width of
+   the number rather than the width of the panel. */
+.input--count {
+  width: 7rem;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ------------------------------------------------------------------ picker */
 
 /* The event picker is a listbox, not a native <select>: an open <select> is drawn
@@ -286,6 +310,39 @@ p {
   border-color: var(--accent);
 }
 
+/* The copy that lives in the dashboard's top bar. Same control, sized like the
+   buttons beside it rather than like a form field, and without the label above
+   it — that becomes the button's accessible name instead. */
+/* Shrinkable, and the only thing in the app bar that is. The mark and sign out
+   are both fixed-width, so if this refused to give ground the bar overflowed and
+   took sign out off the right-hand edge of a phone with it. */
+.picker-wrap {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.picker__button--compact {
+  appearance: none;
+  width: 100%;
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* background-color, not the shorthand: the chevron is a background-image set
+     on .picker__button above, and a shorthand here would wipe it. */
+  background-color: var(--bg);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 0.8125rem;
+  padding: calc(var(--step) * 1) calc(var(--step) * 4) calc(var(--step) * 1)
+    calc(var(--step) * 2);
+  background-position: right calc(var(--step) * 1.5) center;
+  transition: border-color 140ms ease;
+}
+
 .picker__list {
   position: absolute;
   /* Above the sticky confirm bar, which sits at 10. */
@@ -299,7 +356,7 @@ p {
   background: var(--surface-raised);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-input);
-  box-shadow: var(--picker-shadow);
+  box-shadow: var(--shadow-pop);
   max-height: 15rem;
   overflow-y: auto;
   transform-origin: top center;
@@ -378,6 +435,9 @@ p {
   line-height: 1.2;
   text-align: center;
   text-decoration: none;
+  /* A label is two or three words and belongs on one line. "Sign out" wrapping
+     to two in a narrow app bar makes the bar taller than the text in it. */
+  white-space: nowrap;
   cursor: pointer;
   background: var(--accent);
   color: var(--accent-ink);
@@ -428,6 +488,14 @@ p {
   font-size: 0.8125rem;
 }
 
+/* The one action a screen is for. Used for the single primary in the event bar
+   and for the two things a first-time organiser has to find: sign in, and
+   create an event. */
+.btn--lg {
+  padding: calc(var(--step) * 1.875) calc(var(--step) * 3.5);
+  font-size: 1rem;
+}
+
 /* ------------------------------------------------------------- demo cards */
 
 .ballot {
@@ -442,11 +510,15 @@ p {
 .demo {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--step) * 1.75);
+  gap: calc(var(--step) * 1.5);
   width: 100%;
   text-align: left;
   background: var(--surface);
   border: 1px solid var(--line);
+  /* Carries the scored/unscored state as well as the fill does, and carries it
+     down the edge of the card where a thumb scrolling past a list of ten can
+     count what is left without reading any of them. */
+  border-left: 3px solid var(--line-strong);
   border-radius: var(--radius-surface);
   padding: calc(var(--step) * 2);
   color: inherit;
@@ -455,9 +527,22 @@ p {
 
 .demo__head {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: calc(var(--step) * 2);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: calc(var(--step) * 1.5);
   align-items: center;
+}
+
+.demo__state {
+  font-family: var(--mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.demo[data-scored='true'] .demo__state {
+  color: var(--accent);
 }
 
 .demo__slot {
@@ -483,6 +568,7 @@ p {
 
 .demo[data-scored='true'] {
   border-color: var(--line-strong);
+  border-left-color: var(--accent);
   background: var(--surface-raised);
 }
 
@@ -492,18 +578,32 @@ p {
 
 /* ----------------------------------------------------------------- rating */
 
+/*
+ * The 1-5 scale, drawn as a staircase.
+ *
+ * Five identical boxes with five bare digits in them do not say which way is
+ * up. A voter has to decide for themselves whether 1 is best or worst, and
+ * somebody who decides wrong gives their favourite demo the score they meant
+ * for their least favourite — a mistake that is invisible, unrecoverable, and
+ * worth four points. The words at either end say it; this says it without being
+ * read, which is what matters to somebody glancing down at a phone between
+ * demos. It is also the same idea as every other quantity in this app: a bar
+ * whose length is the number.
+ */
 .rating {
   display: flex;
-  align-items: center;
-  gap: var(--step);
+  align-items: flex-end;
+  gap: 6px;
 }
 
 .rating__option {
   flex: 1;
-  /* Comfortably past the 44px touch target floor. Five of these sit side by
-     side on a phone, which is the narrowest any target in this app gets, and
-     they are pressed repeatedly by someone who is also watching a stage. */
-  min-height: 3rem;
+  /* --ramp is 0 at the bottom of the scale and 1 at the top; DemoCard computes
+     it from the range the server sent. The floor is comfortably past the 44px
+     touch target minimum, because the shortest of these is still one of five
+     targets side by side on a phone, pressed by somebody who is also watching a
+     stage. */
+  min-height: calc(3rem + var(--ramp, 0) * 0.85rem);
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: var(--radius-input);
@@ -529,39 +629,103 @@ p {
   color: var(--accent-ink);
 }
 
-/* Reserves its width whether or not it has anything to say, so a row does not
-   reflow every time a score saves. */
-.rating__state {
-  flex: 0 0 3.25rem;
-  font-size: 0.6875rem;
+/* The words the staircase is saying, for anyone who wants them stated. Sits
+   under the row rather than beside it: it used to take 3.25rem out of a phone's
+   width from a row of five targets, and it is now the card header's job. */
+.anchors {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 0.625rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-muted);
-  text-align: right;
+  color: var(--text-faint);
 }
 
 /* ------------------------------------------------------------ ballot status */
 
-/* Autosave means every card says "Saved" the moment it is scored, which on its
-   own reads as "you are done". A ballot missing one score is not counted at
-   all, so this line carries the fraction and what it means for the whole time
-   the ballot is open, not only at the end. */
-.ballotstatus {
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--warn);
-  border-radius: var(--radius-input);
-  background: var(--surface);
-  padding: calc(var(--step) * 1.5) calc(var(--step) * 2);
+/*
+ * How much of this ballot will count, pinned to the bottom of the screen.
+ *
+ * Autosave means every card says "Saved" the moment it is scored, which on its
+ * own reads as "you are done" — and a ballot missing one score is not counted
+ * at all. So this line has to be readable the whole time the ballot is open,
+ * and it used to sit at the top of a page that is ten cards long, which means
+ * it was readable for about one of them. Pinned, it is also where the thumb
+ * already is.
+ */
+.progress {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 1.25);
+  padding: calc(var(--step) * 1.5) calc(var(--step) * 2.5)
+    calc(var(--step) * 2 + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line);
+}
+
+.progress__line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--step);
+  max-width: var(--shell);
+  width: 100%;
+  margin: 0 auto;
   font-size: 0.8125rem;
   color: var(--text-muted);
 }
 
-.ballotstatus[data-complete='true'] {
-  border-left-color: var(--accent);
+.progress__line strong {
+  color: var(--text);
+  font-weight: 600;
 }
 
-.ballotstatus strong {
-  color: var(--text);
+.progress[data-complete='true'] .progress__line strong {
+  color: var(--accent);
+}
+
+/* One segment per demo rather than one continuous bar. The number that matters
+   is "how many are left", and a fraction of a bar has to be measured against
+   its own length to answer that, where four filled boxes out of six can be
+   counted. */
+.progress__track {
+  display: flex;
+  gap: 3px;
+  max-width: var(--shell);
+  width: 100%;
+  margin: 0 auto;
+}
+
+.progress__seg {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  transition: background 200ms ease;
+}
+
+.progress__seg[data-on='true'] {
+  background: var(--accent);
+}
+
+/* The one moment in a voter's whole visit worth marking: the ballot has just
+   become one that counts. Runs once, on the transition, and is gated in JS by
+   motionOk() as well as by the block at the foot of this file. */
+.progress[data-just-completed='true'] .progress__seg {
+  animation: seg-land 0.5s ease-out backwards;
+}
+
+@keyframes seg-land {
+  from {
+    transform: scaleY(2.5);
+  }
 }
 
 /* --------------------------------------------------------------- countdown */
@@ -618,19 +782,135 @@ p {
   border: 1px solid var(--line);
   border-radius: var(--radius-surface);
   background: var(--surface);
-  padding: calc(var(--step) * 3);
+  padding: calc(var(--step) * 4) calc(var(--step) * 3);
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: calc(var(--step) * 1.5);
   text-align: center;
 }
 
+.receipt > p {
+  max-width: 38ch;
+}
+
 .receipt__mark {
+  width: 68px;
+  height: 68px;
+  flex: none;
+  border-radius: 999px;
+  border: 2px solid var(--accent);
+  display: grid;
+  place-items: center;
   font-family: var(--mono);
-  font-size: 2.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--accent);
   letter-spacing: -0.02em;
+}
+
+/* What this voter actually gave, on the screen that tells them it counted.
+   It is the only record they have of it — the ballot is behind them by this
+   point — and it is the thing they will be asked about at the bar afterwards. */
+.myscores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.myscores > span {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8125rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 2px 10px;
+  color: var(--text-muted);
+}
+
+.myscores strong {
+  color: var(--text);
+}
+
+/* --------------------------------------------------------------- waiting */
+
+/*
+ * "Voting has not opened yet." used to be a paragraph on an otherwise empty
+ * page, which is indistinguishable from a page that has finished loading and
+ * has nothing else coming. It is not: this screen is polling, and it will move
+ * on by itself the moment the organiser opens voting. The pulse is that fact,
+ * made visible — the one thing on the screen that says the page is still
+ * listening.
+ */
+.waiting {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+  padding: calc(var(--step) * 4) calc(var(--step) * 3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--step) * 2);
+  text-align: center;
+}
+
+.waiting > p {
+  max-width: 38ch;
+}
+
+.waiting__pulse {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+
+.waiting__pulse::before,
+.waiting__pulse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  animation: ripple 2.6s ease-out infinite;
+}
+
+.waiting__pulse::after {
+  animation-delay: 1.3s;
+}
+
+.waiting__pulse > span {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+@keyframes ripple {
+  from {
+    transform: scale(0.25);
+    opacity: 0.85;
+  }
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+/* Nothing is moving under reduced motion, so the ring becomes a static mark
+   rather than a blank square where the animation would have been. */
+@media (prefers-reduced-motion: reduce) {
+  .waiting__pulse::before {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+
+  .waiting__pulse::after {
+    display: none;
+  }
 }
 
 /* --------------------------------------------------------------- results */
@@ -706,6 +986,14 @@ p {
   font-weight: 600;
 }
 
+/* Emerald, like everything else in this app that belongs to the person holding
+   the phone. It is the one thing in these rows that is not about the room. */
+.result__mine {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ------------------------------------------------------------ big screen */
 
 .screen {
@@ -718,6 +1006,32 @@ p {
 
 .screen h1 {
   font-size: clamp(2rem, 5vw, 4rem);
+  margin-bottom: 0;
+}
+
+.screen__place {
+  color: var(--accent);
+}
+
+/* Nothing to rank yet, so the page centres on what it is waiting for rather
+   than sitting the message in the top-left of a projector. */
+.screen--waiting {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.screen__sub {
+  font-size: clamp(1rem, 1.8vw, 1.5rem);
+  margin-top: calc(var(--step) * 1.5);
+  max-width: none;
+}
+
+/* The team under a name in 2rem type was still at 13px, which is a caption on a
+   laptop and invisible from the back of a room. Everything else on this screen
+   is scaled for the distance; this was the one thing that was not. */
+.screen .demo__team {
+  font-size: clamp(0.9375rem, 1.4vw, 1.125rem);
 }
 
 /* Read from the back of a room, not from a laptop: rows need air between them
@@ -768,19 +1082,19 @@ p {
   align-items: center;
 }
 
-.stats {
+.panel__head {
   display: flex;
-  gap: calc(var(--step) * 4);
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--step);
 }
 
-.stat__value {
-  font-family: var(--mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 1.75rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  display: block;
+/* Secondary by construction: the things in here are reversible, rare, or both,
+   and they sit on the page rather than on a surface so they read as a footnote
+   to the panels above rather than as another one of them. */
+.panel--quiet {
+  background: transparent;
+  border-style: dashed;
 }
 
 .pill {
@@ -855,6 +1169,823 @@ p {
   align-items: center;
 }
 
+/* One field per line on a phone. Three columns inside 360px gives every name
+   field about 90px, which is not enough to see what you typed. */
+@media (max-width: 40rem) {
+  .demo-editor {
+    grid-template-columns: 2.5rem 1fr;
+  }
+
+  .demo-editor > .input:last-child {
+    grid-column: 2;
+  }
+}
+
+.demo-editor__slot {
+  color: var(--text-faint);
+  text-align: center;
+}
+
+/* -------------------------------------------------------------- dashboard */
+
+/*
+ * The organiser's screens are the only ones in this app that are operated
+ * rather than read, and they are operated from two quite different machines:
+ * a laptop at the desk, and a phone held at the side of the stage. Both are
+ * built from the same DOM below — the two-column grid folds into one column of
+ * tabbed panes, and the row of actions unpins itself from the event bar and
+ * becomes a bar under the thumb.
+ *
+ * 62rem is the one breakpoint that matters: it is where two columns of panels
+ * stop having room for the tally's bars and their labels side by side.
+ */
+
+/* Deliberately not sticky. It holds the app's name, the event picker and sign
+   out: three things nobody needs while scrolling a dashboard. The bar below it
+   is the one that has to stay. */
+.appbar {
+  display: flex;
+  align-items: center;
+  gap: var(--step);
+  max-width: var(--shell-wide);
+  margin: 0 auto;
+  padding: calc(var(--step) * 1.5) calc(var(--step) * 2.5);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.appbar__mark {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 0.9375rem;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  flex: none;
+}
+
+.appbar__mark > span {
+  color: var(--accent);
+}
+
+.appbar__spacer {
+  flex: 1;
+  /* Nothing but slack: it must be the first thing to disappear when the picker
+     and sign out need the room. */
+  min-width: 0;
+}
+
+/* The word "Organiser" is a reassurance, not a control. First thing to go. */
+@media (max-width: 34rem) {
+  .appbar__role {
+    display: none;
+  }
+
+  .appbar {
+    padding-inline: calc(var(--step) * 2);
+  }
+}
+
+/* --------------------------------------------------------------- event bar */
+
+/*
+ * One sticky block, not three stacked sticky elements.
+ *
+ * Each of those would have to be told the height of everything above it, and
+ * none of those heights is a constant: a long event name wraps to two lines on
+ * a phone and to one on a laptop, and a browser set to larger text moves all of
+ * them at once. Every such offset is a number that is right on the machine it
+ * was measured on.
+ */
+.topbars {
+  position: sticky;
+  top: 0;
+  z-index: 14;
+  max-width: var(--shell-wide);
+  margin: 0 auto;
+  background: var(--bg);
+}
+
+.eventbar {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--step) * 3);
+  padding: calc(var(--step) * 2.5);
+  border-bottom: 1px solid var(--line);
+}
+
+.eventbar__id {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 0.75);
+  min-width: 0;
+}
+
+.eventbar__name {
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  font-weight: 620;
+  margin: 0;
+  /* Two lines, then an ellipsis. An organiser who names an event after the
+     quarter, the team and the venue should not push the countdown off screen. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.eventbar__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--step);
+}
+
+.eventbar__clock {
+  padding-left: calc(var(--step) * 3);
+  border-left: 1px solid var(--line);
+  flex: none;
+}
+
+/* Bigger here than on a ballot. This is the number an organiser looks up at
+   from across a desk, and it is the only reason the bar is sticky. */
+.eventbar .countdown__value {
+  font-size: 1.5rem;
+  line-height: 1.1;
+}
+
+.eventbar__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--step);
+  flex: none;
+}
+
+@media (max-width: 62rem) {
+  .eventbar {
+    gap: calc(var(--step) * 2);
+    padding: calc(var(--step) * 2);
+  }
+
+  .eventbar__clock {
+    padding-left: calc(var(--step) * 2);
+  }
+
+  /* Off the bar and under the thumb. The primary action is pressed once per
+     event, but it is pressed at the moment somebody is talking to a room, and
+     hunting for it at the top of a scrolled page is the wrong time to be
+     looking at a screen at all. */
+  .eventbar__actions {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 16;
+    margin: 0;
+    padding: calc(var(--step) * 1.5) calc(var(--step) * 2)
+      calc(var(--step) * 2 + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line);
+  }
+
+  /* The one that matters takes the room; New event stays a ghost beside it. */
+  .eventbar__actions > .btn:first-child {
+    flex: 1;
+  }
+
+  .eventbar__new {
+    flex: none;
+  }
+}
+
+/* --------------------------------------------------------------------- tabs */
+
+.tabs {
+  display: none;
+}
+
+@media (max-width: 62rem) {
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: calc(var(--step) * 1.5) calc(var(--step) * 2);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .tab {
+    flex: 1;
+    appearance: none;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    padding: calc(var(--step) * 1) 0;
+    font-family: var(--sans);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 140ms ease, color 140ms ease;
+  }
+
+  .tab[aria-selected='true'] {
+    background: var(--surface-raised);
+    border-color: var(--line-strong);
+    color: var(--text);
+  }
+}
+
+/* ---------------------------------------------------------------- the grid */
+
+.dash {
+  display: grid;
+  /* The tally gets the wider half: its rows carry a name, a bar, a total and an
+     average, and it is the half anybody is actually watching. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: calc(var(--step) * 2.5);
+  max-width: var(--shell-wide);
+  margin: 0 auto;
+  padding: calc(var(--step) * 2.5) calc(var(--step) * 2.5) calc(var(--step) * 8);
+  align-items: start;
+}
+
+.dash__col,
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 2.5);
+  min-width: 0;
+}
+
+@media (max-width: 62rem) {
+  .dash {
+    grid-template-columns: minmax(0, 1fr);
+    /* Clear of the fixed action bar. */
+    padding-bottom: calc(var(--step) * 12 + env(safe-area-inset-bottom));
+  }
+
+  /* The columns stop being columns and let their panes become the grid's own
+     children, so one pane can be shown without an empty column beside it. */
+  .dash__col {
+    display: contents;
+  }
+
+  .pane {
+    display: none;
+  }
+
+  .dash[data-pane='tally'] .pane[data-pane='tally'],
+  .dash[data-pane='turnout'] .pane[data-pane='turnout'],
+  .dash[data-pane='codes'] .pane[data-pane='codes'] {
+    display: flex;
+  }
+}
+
+/* Lets an error sit in the same column as everything else without a panel. */
+.shell--flush {
+  max-width: var(--shell-wide);
+  margin: 0 auto;
+  padding: var(--step) calc(var(--step) * 2.5) 0;
+  min-height: 0;
+}
+
+/* ------------------------------------------------------------------ funnel */
+
+/*
+ * Issued, redeemed, scored. These were three numbers in a row, which left the
+ * relationship between them — the only interesting thing about them — to be
+ * worked out by whoever was reading.
+ */
+.funnel {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 1.75);
+}
+
+.funnel__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--step);
+  align-items: baseline;
+}
+
+.funnel__name {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.funnel__figure {
+  display: flex;
+  align-items: baseline;
+  gap: var(--step);
+}
+
+.funnel__value {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.5rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.funnel__pct {
+  font-size: 0.75rem;
+  color: var(--text-faint);
+}
+
+.funnel__track {
+  grid-column: 1 / -1;
+  height: 6px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.funnel__fill {
+  height: 100%;
+  background: var(--accent-dim);
+  border-radius: 999px;
+  transition: width 400ms ease;
+}
+
+/* The last step, and the only one that is a result rather than a stage. */
+.funnel__row[data-lead='true'] .funnel__fill {
+  background: var(--accent);
+}
+
+/* ---------------------------------------------------------------- callout */
+
+/* Something to act on while there is still time to act. Shares its shape with
+   .ballotstatus, which is the voter's version of the same idea. */
+.callout {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius-input);
+  background: var(--bg);
+  padding: calc(var(--step) * 1.5) calc(var(--step) * 2);
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.callout strong {
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------------- share */
+
+.share {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: calc(var(--step) * 2.5);
+  align-items: start;
+}
+
+.share__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--step);
+  min-width: 0;
+}
+
+/* Smaller than the print sheet's, which has to survive being photographed off a
+   piece of paper. This one is scanned off a screen a metre away. */
+.share .qr {
+  width: 140px;
+  height: 140px;
+}
+
+@media (max-width: 30rem) {
+  .share {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.urlbox {
+  display: flex;
+  align-items: center;
+  gap: var(--step);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-input);
+  padding: calc(var(--step) * 0.75) calc(var(--step) * 0.75) calc(var(--step) * 0.75)
+    calc(var(--step) * 1.5);
+}
+
+.urlbox > code {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ----------------------------------------------------------------- explain */
+
+/* The paragraph that matters the first time somebody sets this up and never
+   again. Folded away rather than deleted. */
+.explain {
+  border-top: 1px solid var(--line);
+  padding-top: calc(var(--step) * 1.5);
+}
+
+.explain > summary {
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: var(--text-faint);
+  list-style: none;
+}
+
+.explain > summary::-webkit-details-marker {
+  display: none;
+}
+
+.explain > summary::before {
+  content: '+ ';
+  font-family: var(--mono);
+}
+
+.explain[open] > summary::before {
+  content: '– ';
+}
+
+.explain > p {
+  margin-top: var(--step);
+  font-size: 0.8125rem;
+  color: var(--text-faint);
+}
+
+/* ----------------------------------------------------------------- livedot */
+
+/* Says the number next to it is arriving on its own. Without it a tally that
+   happens not to be moving is indistinguishable from one that has stopped
+   being fetched. */
+.livedot {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.livedot::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: livedot-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes livedot-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* ------------------------------------------------------------------- empty */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(var(--step) * 1.5);
+  padding-top: calc(var(--step) * 6);
+}
+
+.empty > h1 {
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------- sign in */
+
+/*
+ * The organiser's front door, and the only screen in this app somebody meets
+ * before they know what it is.
+ *
+ * It was a password field on an otherwise empty page, pinned to the top-left of
+ * a 72rem column. Two halves instead: what this thing is, and the way in. On a
+ * phone they stack, brand first — the person signing in on their own device at
+ * the back of a room is the likeliest one never to have seen this before.
+ */
+.auth {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.auth__brand {
+  display: flex;
+  flex-direction: column;
+  /* Centred rather than spread. Pinning the steps to the bottom of the column
+     leaves a screen's worth of nothing between them and the paragraph they
+     follow on a tall display, and reads as a layout that lost something. */
+  justify-content: center;
+  gap: calc(var(--step) * 5);
+  padding: calc(var(--step) * 6);
+  border-right: 1px solid var(--line);
+  /* The only gradient in the app. It is doing the job a photograph would do on
+     a marketing page and the job nothing was doing here before: giving the half
+     of the screen that carries no controls a reason to be looked at. Anchored
+     bottom-left so it reads as light coming into the corner rather than as a
+     band across the middle. */
+  background:
+    radial-gradient(
+      120% 90% at 0% 100%,
+      color-mix(in srgb, var(--accent) 12%, transparent),
+      transparent 62%
+    ),
+    var(--surface);
+}
+
+.auth__brandhead {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 1.5);
+}
+
+.auth__mark {
+  font-family: var(--mono);
+  font-size: clamp(2rem, 3.4vw, 3rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  margin: 0;
+}
+
+.auth__mark > span {
+  color: var(--accent);
+}
+
+.auth__blurb {
+  max-width: 36ch;
+  font-size: 0.9375rem;
+}
+
+/* Numbered because it is a sequence: each step is only possible once the one
+   above it is done, and an organiser reading this has not done any of them. */
+.auth__steps {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 1.25);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.auth__steps > li {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+  gap: var(--step);
+  align-items: baseline;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.auth__steps b {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+.auth__form {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  justify-self: center;
+  gap: calc(var(--step) * 2.5);
+  width: min(27rem, 100%);
+  padding: calc(var(--step) * 6);
+}
+
+.auth__form > div > h1 {
+  font-size: clamp(1.5rem, 3vw, 1.875rem);
+  margin: calc(var(--step) * 0.5) 0 0;
+}
+
+@media (max-width: 52rem) {
+  .auth {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 100dvh;
+  }
+
+  .auth__brand {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: calc(var(--step) * 5) calc(var(--step) * 2.5) calc(var(--step) * 4);
+    gap: calc(var(--step) * 3);
+  }
+
+  .auth__form {
+    padding: calc(var(--step) * 4) calc(var(--step) * 2.5) calc(var(--step) * 8);
+    width: 100%;
+  }
+
+  /* Tighter, and one line each. The four steps are orientation for a first-time
+     organiser and they should not push the password field two screens down for
+     everybody else. */
+  .auth__steps {
+    gap: var(--step);
+  }
+
+  .auth__blurb {
+    font-size: 0.875rem;
+  }
+}
+
+/* --------------------------------------------------------------- skeleton */
+
+/*
+ * The shape of what is loading, rather than the word "Loading".
+ *
+ * Every screen in this app used to answer its first render with a single 11px
+ * uppercase label, which on a phone is a nearly blank page — and a nearly blank
+ * page during an event reads as a page that failed. A block the size of the
+ * thing that is coming says the same thing without the room wondering.
+ */
+.skeleton {
+  background: var(--line);
+  border-radius: var(--radius-input);
+  /* Its own opacity pulse rather than a moving sheen: a sweeping gradient is a
+     second animation style this app does not otherwise have, and it costs a
+     repaint per frame on the phones this is built for. */
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* ----------------------------------------------------------------- toast */
+
+/*
+ * Confirmation for actions whose effect is invisible.
+ *
+ * Copying the vote link and generating codes both used to happen in complete
+ * silence, and silence after a tap is indistinguishable from a tap that missed.
+ * Deliberately bottom-centre on a phone and bottom-right on a laptop: it must
+ * never sit under the thumb on the sticky action bar.
+ */
+.toasts {
+  position: fixed;
+  z-index: 40;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom) + var(--step) * 11);
+  display: flex;
+  flex-direction: column;
+  gap: var(--step);
+  width: min(24rem, calc(100vw - var(--step) * 4));
+  /* The list is a layer over the page, not a region of it. Only the toasts
+     themselves take pointer events, so nothing underneath goes dead. */
+  pointer-events: none;
+}
+
+@media (min-width: 56rem) {
+  .toasts {
+    left: auto;
+    right: calc(var(--step) * 3);
+    bottom: calc(var(--step) * 3);
+    transform: none;
+  }
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--step) * 1.5);
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-input);
+  padding: calc(var(--step) * 1.5) calc(var(--step) * 2);
+  box-shadow: var(--shadow-pop);
+  font-size: 0.875rem;
+  animation: toast-in 0.22s ease-out;
+}
+
+.toast[data-tone='error'] {
+  border-left-color: var(--danger);
+}
+
+.toast__label {
+  color: var(--accent);
+}
+
+.toast[data-tone='error'] .toast__label {
+  color: var(--danger);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* ---------------------------------------------------------------- dialog */
+
+/*
+ * Replaces window.confirm for the two decisions that cannot be undone.
+ *
+ * The same argument the picker and the archive toggle already make: a native
+ * dialogue is drawn by the operating system, so it arrives looking like macOS on
+ * one laptop and Windows on the next. It also cannot say anything beyond one
+ * line of text, and both of these decisions have a cost worth spelling out —
+ * how long is left, and how many people it takes the choice away from.
+ */
+/* A native <dialog> opened with showModal(), which is where the focus trap, the
+   Escape key and the inertness of the page behind it come from. Nothing about
+   it is drawn by the operating system — the element and its backdrop are both
+   ours — so the argument against a native <select> does not apply here. */
+.dialog {
+  width: min(30rem, calc(100vw - var(--step) * 6));
+  max-width: none;
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-surface);
+  padding: calc(var(--step) * 3.5);
+  box-shadow: var(--shadow-pop);
+}
+
+.dialog[open] {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 2);
+  animation: dialog-in 0.2s ease-out;
+}
+
+.dialog::backdrop {
+  background: rgb(0 0 0 / 0.55);
+  animation: scrim-in 0.16s ease-out;
+}
+
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+
+.dialog h2 {
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+  font-weight: 620;
+}
+
+.dialog p {
+  font-size: 0.9375rem;
+}
+
+/* The numbers the decision turns on, stated rather than described. */
+.dialog__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--step) * 4);
+  padding: calc(var(--step) * 1.75) 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.dialog__fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dialog__fact > strong {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.25rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--step);
+  justify-content: flex-end;
+}
+
 /* ---------------------------------------------------------------- a11y */
 
 .visually-hidden {
@@ -907,17 +2038,44 @@ p {
   padding: calc(var(--step) * 2);
 }
 
+/* Stuck to the top. Five hundred slips is a very long way to scroll back up to
+   reach the one button on the page, and the organiser reaches for it exactly
+   once — at the end, from the bottom. */
 .printbar {
+  position: sticky;
+  top: calc(var(--step) * 2);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 1.5);
+  padding: calc(var(--step) * 2);
+  margin-bottom: calc(var(--step) * 2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+}
+
+.printbar__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: calc(var(--step) * 2);
   flex-wrap: wrap;
-  padding: calc(var(--step) * 2);
-  margin-bottom: calc(var(--step) * 2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-surface);
-  background: var(--surface);
+}
+
+.printbar__track {
+  height: 4px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.printbar__fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 200ms ease;
 }
 
 .slips {
@@ -966,7 +2124,24 @@ p {
   color: var(--text-muted);
 }
 
+/* A slip whose QR has not been encoded yet. Holds the grid's shape so it does
+   not appear to end wherever the rendering has got to. */
+.slip--pending {
+  border-style: solid;
+  border-color: var(--line);
+  /* The height a finished slip settles at: the event name, the 190px code and
+     the line under it. Without this the grid would reflow every batch. */
+  min-height: 258px;
+  justify-content: center;
+}
+
 @media print {
+  /* The browser's own default is often half an inch, which on A4 wastes a
+     column. Stated so the sheet is the same on every machine a venue owns. */
+  @page {
+    margin: 10mm;
+  }
+
   /* Forced light. The tokens follow the organiser's system theme, and a sheet
      of slips printed out of the dark palette is a page of black rectangles.
      Most browsers drop backgrounds when printing anyway, but "most" is not the
@@ -974,6 +2149,9 @@ p {
   body {
     background: #ffffff;
     color: #000000;
+    /* The screen keeps content clear of a phone's notch; a printer has no
+       notch, and the inset is a random margin on the page. */
+    padding: 0;
   }
 
   .printpage {
@@ -983,6 +2161,12 @@ p {
   }
 
   .printbar {
+    display: none;
+  }
+
+  /* Nothing half-rendered goes on paper. Print is only reachable once every
+     slip is encoded, but a browser's own Ctrl-P does not wait to be allowed. */
+  .slip--pending {
     display: none;
   }
 

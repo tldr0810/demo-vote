@@ -7,16 +7,22 @@ import { personalVoteUrl } from '../voteUrl'
 type Slip = { code: string; dataUri: string }
 
 /**
+ * How many slips are appended to the page at a time.
+ *
+ * One at a time was a re-render per QR, and a five-hundred-code event is five
+ * hundred of them: the tab stops answering the scroll wheel for the length of
+ * the job, which is exactly when the organiser is trying to see whether it is
+ * working. Batching gives the browser a gap to paint in, and twenty-four is
+ * roughly two rows of the grid, so the page still visibly grows.
+ */
+const BATCH = 24
+
+/**
  * The sheet of personal QR codes, cut up and handed out at check-in.
  *
  * One slip per attendee, each carrying its own code. Scanning it lands that
  * person on the ballot with nothing to type, which is the whole point: typing
  * eight characters on a phone in a dark room was the step that lost people.
- *
- * The code is printed under its QR as well. A scanner that mangles the query
- * string, a slip that came out of the printer smudged, and a phone whose camera
- * will not focus all end at the manual entry screen, and the slip has to be able
- * to rescue them.
  *
  * Deliberately a page rather than a PDF export: the browser's own print dialogue
  * already does page size, margins and duplex, and it is the tool the organiser
@@ -63,14 +69,24 @@ export function PrintCodes({ eventId }: { eventId: string }) {
       if (cancelled) return
       setTotal(codes.length)
 
-      // Rendered one at a time and appended as they land, rather than awaited as
-      // one batch. Five hundred slips is five hundred encodes, and an organiser
-      // watching a blank page for that long assumes it has hung.
+      // Rendered as they land rather than awaited as one batch. Five hundred
+      // slips is five hundred encodes, and an organiser watching a blank page
+      // for that long assumes it has hung.
       const origin = window.location.origin
+      let pending: Slip[] = []
       for (const code of codes) {
         const dataUri = await renderQrSvg(personalVoteUrl(origin, eventId, code))
         if (cancelled) return
-        setSlips((previous) => [...previous, { code, dataUri }])
+        pending.push({ code, dataUri })
+        if (pending.length >= BATCH) {
+          const batch = pending
+          pending = []
+          setSlips((previous) => [...previous, ...batch])
+        }
+      }
+      if (pending.length > 0) {
+        const batch = pending
+        setSlips((previous) => [...previous, ...batch])
       }
     }
 
@@ -83,47 +99,83 @@ export function PrintCodes({ eventId }: { eventId: string }) {
   if (error) {
     return (
       <div className="shell">
-        <h1>Cannot print these codes</h1>
-        <p>{error}</p>
-        <a className="btn btn--ghost" href="/admin">
-          Back to the dashboard
-        </a>
+        <div className="empty">
+          <span className="label">Cannot print</span>
+          <h1>These codes are not available</h1>
+          <p>{error}</p>
+          <a className="btn btn--ghost" href="/admin">
+            Back to the dashboard
+          </a>
+        </div>
       </div>
     )
   }
 
   const done = total !== null && slips.length === total
+  const progress = total && total > 0 ? slips.length / total : 0
+
+  if (total === 0) {
+    return (
+      <div className="shell">
+        <div className="empty">
+          <span className="label">{event?.name ?? 'Voting codes'}</span>
+          <h1>No codes to print yet</h1>
+          <p>
+            Generate a batch on the dashboard first — one per person expected, and a few spares.
+            They appear here as printable slips.
+          </p>
+          <a className="btn" href="/admin">
+            Back to the dashboard
+          </a>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="printpage">
       {/* Everything in here is hidden by the print stylesheet: it is the
-          organiser's controls, not part of what goes on paper. */}
+          organiser's controls, not part of what goes on paper. Stuck to the top,
+          because five hundred slips is a long way to scroll back up to reach the
+          one button on the page. */}
       <div className="printbar">
-        <div>
-          <strong>{event?.name ?? 'Voting codes'}</strong>
-          <div className="hint">
-            {total === null
-              ? 'Loading codes'
-              : done
-                ? `${total} slips ready. Print, then cut along the lines.`
-                : `Rendering ${slips.length} of ${total}`}
+        <div className="printbar__row">
+          <div>
+            <strong>{event?.name ?? 'Voting codes'}</strong>
+            <div className="hint">
+              {total === null
+                ? 'Finding the codes'
+                : done
+                  ? `${total} slips ready. Print, then cut along the dashed lines — three across.`
+                  : `Rendering ${slips.length} of ${total}. Leave this page open.`}
+            </div>
+          </div>
+          <div className="row">
+            <a className="btn btn--ghost" href="/admin">
+              Back
+            </a>
+            <button className="btn" type="button" disabled={!done} onClick={() => window.print()}>
+              {done ? 'Print' : 'Rendering'}
+            </button>
           </div>
         </div>
-        <div className="row">
-          <a className="btn btn--ghost" href="/admin">
-            Back
-          </a>
-          <button className="btn" type="button" disabled={!done} onClick={() => window.print()}>
-            Print
-          </button>
-        </div>
-      </div>
 
-      {total === 0 ? (
-        <p className="shell">
-          This event has no codes yet. Generate a batch on the dashboard first.
-        </p>
-      ) : null}
+        {/* A bar rather than the counter alone. Five hundred QR codes is long
+            enough that "247 of 500" does not answer the only question being
+            asked, which is whether this is nearly over. */}
+        {!done ? (
+          <div
+            className="printbar__track"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={total ?? 0}
+            aria-valuenow={slips.length}
+            aria-label="Slips rendered"
+          >
+            <div className="printbar__fill" style={{ width: `${progress * 100}%` }} />
+          </div>
+        ) : null}
+      </div>
 
       <div className="slips">
         {/* The code itself is not printed. It was here as the fallback for a
@@ -140,6 +192,17 @@ export function PrintCodes({ eventId }: { eventId: string }) {
             <div className="slip__hint">Scan to score the demos</div>
           </div>
         ))}
+
+        {/* The shape of what is still coming, so the grid does not appear to
+            end where the rendering happens to have got to. Capped: an organiser
+            printing five thousand does not need five thousand grey boxes. */}
+        {!done && total !== null
+          ? Array.from({ length: Math.min(BATCH, total - slips.length) }, (_, index) => (
+              <div className="slip slip--pending" key={`pending-${index}`} aria-hidden="true">
+                <span className="skeleton slip__qr" />
+              </div>
+            ))
+          : null}
       </div>
     </div>
   )

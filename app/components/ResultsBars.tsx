@@ -18,12 +18,35 @@ export function ResultsBars({
   tally,
   maxScore,
   revealed,
+  ranked = true,
+  mine,
   fillDelay = 0,
 }: {
   tally: TallyRow[]
   /** Top of the scoring scale, from the server. Bars are drawn against it. */
   maxScore: number
   revealed: boolean
+  /**
+   * Whether there is a ranking to show yet.
+   *
+   * False before the first complete ballot, when every demo is on zero and so
+   * every demo is joint first. That is arithmetically true and reads as a bug:
+   * an organiser watching a dashboard before the doors open sees the number 01
+   * six times down the left of the list. The demos are numbered by their slot
+   * instead, which is what they are called on the ballot and on the running
+   * order, and the column becomes a ranking as soon as there is one.
+   */
+  ranked?: boolean
+  /**
+   * This voter's own scores, keyed by demo id, on the one screen where they
+   * exist: the standings a voter reads on their own phone.
+   *
+   * The projector and the dashboard show the same rows to a room, and to a room
+   * they are the whole story. To the person holding the phone they are not:
+   * that person spent the last hour deciding six numbers, and this is the only
+   * screen that can tell them what became of them. Omitted everywhere else.
+   */
+  mine?: Record<string, number>
   /**
    * Holds the bars at zero for this many seconds before they grow.
    *
@@ -103,10 +126,20 @@ export function ResultsBars({
             className={`result${isLeader ? ' result--leader' : ''}`}
             data-flip-id={row.demoId}
           >
-            <span className="result__rank num">{String(row.rank).padStart(2, '0')}</span>
+            <span className="result__rank num">
+              {String(ranked ? row.rank : row.slot).padStart(2, '0')}
+            </span>
             <div className="result__body">
               <div className="result__name">{row.name}</div>
-              {row.team ? <div className="demo__team">{row.team}</div> : null}
+              {row.team || mine?.[row.demoId] !== undefined ? (
+                <div className="demo__team">
+                  {row.team}
+                  {row.team && mine?.[row.demoId] !== undefined ? ' · ' : null}
+                  {mine?.[row.demoId] !== undefined ? (
+                    <span className="result__mine">You gave {mine[row.demoId]}</span>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="result__track">
                 <div className="result__fill" data-share={share} />
               </div>
