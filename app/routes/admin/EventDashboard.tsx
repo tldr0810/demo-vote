@@ -101,9 +101,21 @@ export function EventDashboard({
   // Guards against a reading that describes a different event, which is what the
   // first poll after a navigation looks like.
   const forThisEvent = results?.event.id === event.id ? results : null
-  const stats = forThisEvent?.stats ?? event.stats
   const status = dashboardStatus(event, forThisEvent)
   const live = tallyCanChange(status)
+
+  // Whichever of the two readings is the fresher one, which is not the same
+  // source at every point in an event.
+  //
+  // The poll only repeats while voting is running; on a draft, closed or
+  // revealed event it runs once when the dashboard mounts and never again. So
+  // outside a live window the polled figure is a snapshot from whenever this
+  // screen was opened, while the event row behind it is refetched after every
+  // write the organiser makes. Preferring the poll unconditionally meant
+  // generating a batch left "0 issued" on screen — the number had been
+  // refetched, and a reading taken before the batch existed was being drawn over
+  // the top of it.
+  const stats = live ? (forThisEvent?.stats ?? event.stats) : event.stats
 
   // The gap between a code redeemed and a ballot that will be counted: people
   // who started scoring and have not finished.
@@ -225,7 +237,7 @@ export function EventDashboard({
         facts={[
           { value: `${minutesOf(event.windowSeconds)} min`, label: 'window' },
           { value: String(event.demos.length), label: 'demos' },
-          { value: String(event.stats.issued), label: 'codes issued' },
+          { value: String(stats.issued), label: 'codes issued' },
         ]}
         confirmLabel="Open voting"
         cancelLabel="Not yet"
