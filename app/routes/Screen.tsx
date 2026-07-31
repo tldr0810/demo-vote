@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, type TallyRow } from '../api'
 import { ResultsBars } from '../components/ResultsBars'
+import { Skeleton, SkeletonRows } from '../components/Skeleton'
 import { messageFor } from '../messages'
 import { gsap, motionOk, useGSAP } from '../motion'
 import { joinNames, leaders } from '../ranking'
@@ -114,7 +115,15 @@ export function Screen({ eventId }: { eventId: string }) {
 
   if (error === 'PENDING') {
     return (
-      <div className="screen" ref={rootRef}>
+      <div className="screen screen--waiting" ref={rootRef}>
+        {/* The same pulse a waiting phone shows, for the same reason and with
+            more riding on it: this is on a wall in front of a room, and a
+            projector holding a still page is the picture of a machine that has
+            crashed. It has not — it is polling, and it will turn into the
+            standings by itself. */}
+        <div className="waiting__pulse" aria-hidden="true">
+          <span />
+        </div>
         <span className="label">Demo Vote</span>
         <h1>Results not published yet</h1>
         <p>This page updates itself the moment the organisers reveal them.</p>
@@ -133,8 +142,13 @@ export function Screen({ eventId }: { eventId: string }) {
 
   if (!payload) {
     return (
-      <div className="screen" ref={rootRef}>
-        <span className="label">Loading</span>
+      <div className="screen" ref={rootRef} aria-busy="true">
+        <span className="visually-hidden" role="status">
+          Loading the standings
+        </span>
+        <Skeleton height="1rem" width="16rem" />
+        <Skeleton height="4rem" width="60%" />
+        <SkeletonRows rows={4} height="4rem" />
       </div>
     )
   }
@@ -152,18 +166,36 @@ export function Screen({ eventId }: { eventId: string }) {
         </span>
       </div>
 
-      {/* Says the word out loud on a tie. Two names in 4rem type with no label
-          reads as a layout accident; "joint first" tells the room what it is
-          looking at, and the standings underneath show the equal counts. */}
-      {winners.length > 1 ? (
-        <span className="label" data-anim="screen-head">
-          Joint first place
+      {/* Says the word out loud, and says it on a single winner too. Two names
+          in 4rem type with no label reads as a layout accident, and one name in
+          4rem type reads as a title — the room has to be told this is the
+          result. The standings underneath show the counts. */}
+      {winners.length > 0 ? (
+        <span className="label screen__place" data-anim="screen-head">
+          {winners.length > 1 ? 'Joint first place' : 'First place'}
         </span>
       ) : null}
 
-      <h1 data-anim="winner">
-        {winners.length > 0 ? joinNames(winners.map((row) => row.name)) : 'No ballots were counted'}
-      </h1>
+      <div>
+        <h1 data-anim="winner">
+          {winners.length > 0
+            ? joinNames(winners.map((row) => row.name))
+            : 'No ballots were counted'}
+        </h1>
+
+        {/* The team, and what the name above it actually scored. The largest
+            type in the room was carrying no evidence at all: a name, and then
+            a list somebody at the back has to find it in again to learn
+            anything about it. Only for a single winner — on a tie there are two
+            teams and two identical averages, and the rows below say it better
+            than a comma would. */}
+        {winners.length === 1 ? (
+          <p className="screen__sub" data-anim="screen-head">
+            {winners[0]!.team ? `${winners[0]!.team} · ` : ''}
+            {winners[0]!.average.toFixed(1)} out of {payload.maxScore} on average
+          </p>
+        ) : null}
+      </div>
 
       {/* Starts growing a fraction after the rows begin arriving, so the first
           thing the room sees in a row is an empty track, and then it fills. */}

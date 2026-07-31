@@ -1006,6 +1006,32 @@ p {
 
 .screen h1 {
   font-size: clamp(2rem, 5vw, 4rem);
+  margin-bottom: 0;
+}
+
+.screen__place {
+  color: var(--accent);
+}
+
+/* Nothing to rank yet, so the page centres on what it is waiting for rather
+   than sitting the message in the top-left of a projector. */
+.screen--waiting {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.screen__sub {
+  font-size: clamp(1rem, 1.8vw, 1.5rem);
+  margin-top: calc(var(--step) * 1.5);
+  max-width: none;
+}
+
+/* The team under a name in 2rem type was still at 13px, which is a caption on a
+   laptop and invisible from the back of a room. Everything else on this screen
+   is scaled for the distance; this was the one thing that was not. */
+.screen .demo__team {
+  font-size: clamp(0.9375rem, 1.4vw, 1.125rem);
 }
 
 /* Read from the back of a room, not from a laptop: rows need air between them

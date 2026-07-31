@@ -23,6 +23,27 @@ export function motionOk(): boolean {
   return !window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
+/**
+ * The shudder a rejected credential gets.
+ *
+ * Both places somebody types something that can be wrong — a voting code on a
+ * phone, an admin password on a laptop — and it lives here because they were
+ * not the same: the ballot's entry screen shook and the organiser's sign-in did
+ * nothing at all, so the same kind of failure felt like two different kinds of
+ * app. A wrong password should be felt before the sentence under it is read.
+ *
+ * Does nothing under reduced motion, where the error text is the whole message.
+ * `clearProps` so the inline transform GSAP writes is gone once it lands.
+ */
+export function shake(element: Element | null): void {
+  if (!element || !motionOk()) return
+  gsap.fromTo(
+    element,
+    { x: -9 },
+    { x: 0, duration: 0.5, ease: 'elastic.out(1, 0.32)', clearProps: 'x' },
+  )
+}
+
 // Dev only. GSAP drives its timelines from requestAnimationFrame, which
 // browsers throttle to a standstill in a tab that reports itself hidden (an
 // embedded preview pane, a headless screenshot run, a background window).

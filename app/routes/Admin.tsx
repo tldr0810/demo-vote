@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type AdminEvent, type AdminResults, type EventStatus } from '../api'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { CountdownRing } from '../components/CountdownRing'
@@ -10,6 +10,7 @@ import { Toasts, useToasts } from '../components/Toasts'
 import { VoteQr } from '../components/VoteQr'
 import { dashboardStatus, tallyCanChange, type DashboardStatus } from '../adminStatus'
 import { STATUS_LABEL, messageFor } from '../messages'
+import { shake } from '../motion'
 
 const RESULTS_POLL_MS = 2000
 const DEFAULT_DEMO_COUNT = 6
@@ -291,6 +292,16 @@ function SignIn({
   onPassword: (value: string) => void
   onSubmit: (submitted: React.FormEvent) => void
 }) {
+  const fieldRef = useRef<HTMLDivElement>(null)
+
+  // The ballot's entry screen has always done this and this one did nothing at
+  // all, so the same kind of failure — a credential that was not accepted —
+  // felt like two different applications depending on which end of the event
+  // you were standing at.
+  useEffect(() => {
+    if (error) shake(fieldRef.current)
+  }, [error])
+
   return (
     <div className="auth">
       {/* The half that says what this is. On a phone it collapses to a heading
@@ -334,7 +345,7 @@ function SignIn({
           <h1>Sign in to run an event</h1>
         </div>
 
-        <div className="field">
+        <div className="field" ref={fieldRef}>
           <label htmlFor="admin-password">Admin password</label>
           <input
             id="admin-password"

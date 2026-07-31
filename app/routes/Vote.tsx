@@ -3,8 +3,9 @@ import { api, type Ballot, type PublicEvent, type ScoreSaved, type TallyRow } fr
 import { CountdownRing } from '../components/CountdownRing'
 import { DemoCard } from '../components/DemoCard'
 import { ResultsBars } from '../components/ResultsBars'
+import { Skeleton, SkeletonRows } from '../components/Skeleton'
 import { messageFor } from '../messages'
-import { gsap, motionOk, useGSAP } from '../motion'
+import { gsap, motionOk, shake, useGSAP } from '../motion'
 import { codeFromSearch, stripCodeFromUrl } from '../voteUrl'
 import { pollIntervalFor, watchAction, type WatchedPhase } from '../voteWatch'
 
@@ -415,13 +416,7 @@ export function Vote({ eventId }: { eventId: string | null }) {
       setBusy(false)
       setError(messageFor(result.error))
       // A wrong code should feel wrong before it is read.
-      if (motionOk()) {
-        gsap.fromTo(
-          entryCardRef.current,
-          { x: -9 },
-          { x: 0, duration: 0.5, ease: 'elastic.out(1, 0.32)', clearProps: 'x' },
-        )
-      }
+      shake(entryCardRef.current)
       return
     }
 
@@ -552,7 +547,28 @@ export function Vote({ eventId }: { eventId: string | null }) {
 
   return (
     <div className="shell" ref={rootRef}>
-      {phase === 'loading' ? <p className="label">Loading</p> : null}
+      {/* Says what just happened on a screen that changed by itself.
+          A phone left on this page moves from waiting to the ballot to the
+          standings without anybody touching it, and a voter who is not looking
+          at it — which is the whole point of leaving it open — otherwise gets no
+          word of any of it. Polite, and only ever one sentence long. */}
+      <span className="visually-hidden" role="status" aria-live="polite">
+        {phase === 'ballot'
+          ? 'Voting is open. Your ballot is ready.'
+          : phase === 'results'
+            ? 'The results have been published.'
+            : phase === 'unavailable' && event?.status !== 'draft'
+              ? 'Voting has closed.'
+              : ''}
+      </span>
+
+      {phase === 'loading' ? (
+        <div className="stack" aria-busy="true">
+          <Skeleton height="1.75rem" width="60%" />
+          <Skeleton height="3rem" width="80%" />
+          <SkeletonRows rows={3} height="8rem" />
+        </div>
+      ) : null}
 
       {phase === 'unavailable' ? (
         <div className="stack">
