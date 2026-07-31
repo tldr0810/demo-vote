@@ -322,6 +322,24 @@ p {
   min-width: 0;
 }
 
+/*
+ * Not on a phone.
+ *
+ * The app bar on an event page carries the mark, "← All events", this, and Sign
+ * out. At 390px that is more than fits, and because this is the only shrinkable
+ * item in the row it was the one that paid: it collapsed to a stub reading "Many"
+ * with the label printed over the chevron.
+ *
+ * Hiding it loses nothing a phone needs. The picker is a laptop affordance for
+ * hopping between parallel tracks; "← All events" is immediately beside it, and
+ * every event on the list it leads to is one tap.
+ */
+@media (max-width: 62rem) {
+  .picker-wrap {
+    display: none;
+  }
+}
+
 .picker__button--compact {
   appearance: none;
   width: 100%;
