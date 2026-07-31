@@ -357,10 +357,43 @@ p {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-input);
   box-shadow: var(--shadow-pop);
-  max-height: 15rem;
+  max-height: min(60vh, 22rem);
   overflow-y: auto;
+  /* The page behind must not start scrolling once the list hits its end. */
+  overscroll-behavior: contain;
   transform-origin: top center;
   animation: picker-in 0.14s ease-out;
+}
+
+/* The compact copy's list is sized by its own contents, not by its button.
+   Everywhere else the trigger is a full-width form field and matching its width
+   is right; in the app bar the trigger is the one shrinkable item in the row and
+   its label is already ellipsised, so inheriting that width handed the list a
+   measurement taken from truncated text and every row wrapped onto two lines.
+
+   Anchored to the right rather than the left, because the control sits at the
+   right-hand end of the bar: growing leftwards keeps a long event name on the
+   screen instead of pushing it past the edge. The cap is whichever is smaller,
+   a comfortable reading width or the viewport minus the app bar's padding, so
+   the list can never be the thing that makes a phone scroll sideways. Labels
+   longer than the cap still wrap — but now at the width the words need, not at
+   the width the button happened to shrink to. */
+.picker-wrap .picker__list {
+  left: auto;
+  right: 0;
+  width: max-content;
+  min-width: 100%;
+  /* --picker-room is the measured distance from this list's right edge to the
+     left edge of the window, set by EventPicker while the list is open. It has
+     to be measured: the cap is not the width of the window but the gap between
+     the anchor and its edge, and no CSS length names that. 100vw is the
+     fallback for the frame before the measurement lands. */
+  max-width: min(22rem, var(--picker-room, calc(100vw - var(--step) * 4)));
+  /* The list opened by a 13px control was rendering at the root 16px: a size
+     bigger than the thing that opened it, which is what pushed the labels over
+     the wrap in the first place. */
+  font-size: 0.8125rem;
+  transform-origin: top right;
 }
 
 /* Anchored to the button it belongs to, so the list reads as growing out of the
@@ -385,9 +418,17 @@ p {
   display: grid;
   grid-template-columns: calc(var(--step) * 1.75) 1fr;
   gap: var(--step);
+  /* Top, not centre: a label long enough to wrap would otherwise leave the tick
+     hovering between its two lines instead of against the first one. */
+  align-items: start;
+  line-height: 1.35;
   padding: calc(var(--step) * 1.25) calc(var(--step) * 1.25);
   border-radius: calc(var(--radius-input) - 3px);
   cursor: pointer;
+  /* Arrowing to the row nearest the fold scrolls it flush with the container's
+     edge, which is under the list's own padding. This keeps that padding
+     between the row and the border. */
+  scroll-margin-block: calc(var(--step) * 0.75);
 }
 
 /* One highlight, driven by the keyboard and by the pointer alike, so arrowing
