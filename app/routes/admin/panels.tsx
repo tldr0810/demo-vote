@@ -281,7 +281,7 @@ export function CodesPanel({
             Print slips
           </a>
           <a className="btn btn--ghost btn--sm" href={`/api/admin/event/${event.id}/codes.csv`}>
-            Download CSV
+            Save CSV
           </a>
         </div>
       ) : null}

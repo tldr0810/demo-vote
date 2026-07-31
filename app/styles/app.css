@@ -1163,15 +1163,16 @@ p {
    same layout decision at every width, and the only thing that changes is how
    many of them fit.
 
-   8.75rem is the wider of the two labels plus its own padding. Tying the track
-   minimum to the text is what stops a second column appearing before the words
-   in it fit: a phone too narrow for the pair gets one full-width column instead
-   of two clipped ones. The ceiling is the other end of the same idea — without
-   it the columns keep growing with the panel, and on a laptop these end up drawn
-   wider than the primary control above them. */
+   8rem clears the wider of the two labels plus its own padding, with room to
+   spare for a font stack that renders wider than the one this was measured in.
+   Tying the track minimum to the text is what stops a second column appearing
+   before the words in it fit: a phone too narrow for the pair gets one
+   full-width column instead of two clipped ones. The ceiling is the other end of
+   the same idea — without it the columns keep growing with the panel, and on a
+   laptop these end up drawn wider than the primary control above them. */
 .row--pair {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(8.75rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
   align-items: stretch;
   max-width: 26rem;
 }

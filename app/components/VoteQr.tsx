@@ -17,7 +17,7 @@ export function VoteQr({ url }: { url: string }) {
     <div className="qr-block">
       <img className="qr" src={dataUri} alt={`QR code linking to ${url}`} width={220} height={220} />
       <a className="btn btn--ghost btn--sm" href={dataUri} download="vote-qr.svg">
-        Download SVG
+        Save SVG
       </a>
     </div>
   )
