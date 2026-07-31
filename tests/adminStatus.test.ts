@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { EventStatus } from '../app/api'
-import { dashboardStatus, tallyCanChange } from '../app/adminStatus'
+import { codesCanStillBeUsed, dashboardStatus, tallyCanChange } from '../app/adminStatus'
 
 /**
  * The one stretch of an event where the organiser's dashboard and the truth can
@@ -53,6 +53,20 @@ describe('what follows from it', () => {
     for (const status of OTHER) {
       expect(tallyCanChange(status)).toBe(false)
     }
+  })
+
+  it('stops treating codes as the main event once the window has shut', () => {
+    // Before and during: a code generated now is a slip somebody can still
+    // redeem. After: it is a slip nobody can, so the panel that makes them is
+    // not the primary action on the dashboard any more.
+    expect(codesCanStillBeUsed('draft')).toBe(true)
+    expect(codesCanStillBeUsed('open')).toBe(true)
+    // A window that ran out on its own counts as shut. Redemption is refused by
+    // the clock, not by the Close button, so waiting for the button here would
+    // leave the dashboard offering codes for an event that is over.
+    expect(codesCanStillBeUsed('ended')).toBe(false)
+    expect(codesCanStillBeUsed('closed')).toBe(false)
+    expect(codesCanStillBeUsed('revealed')).toBe(false)
   })
 
   it('keeps polling for exactly as long as a ballot can still land', () => {

@@ -46,3 +46,16 @@ export function dashboardStatus(
 export function tallyCanChange(status: DashboardStatus): boolean {
   return status === 'open'
 }
+
+/**
+ * Whether a code generated now could still be redeemed by somebody.
+ *
+ * Only up to the point the window shuts. After that a new code is a slip nobody
+ * can use — redemption is refused for the same reason voting is — so the panel
+ * that makes them stops being the loudest thing on the dashboard. `ended`
+ * counts as shut: the clock closes the window whether or not the organiser has
+ * pressed Close yet.
+ */
+export function codesCanStillBeUsed(status: DashboardStatus): boolean {
+  return status === 'draft' || status === 'open'
+}
