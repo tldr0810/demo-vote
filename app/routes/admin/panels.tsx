@@ -215,6 +215,12 @@ export function CodesPanel({
   // loudest thing on the dashboard and the one thing on it that does nothing.
   const usable = codesCanStillBeUsed(status)
 
+  // Both ways out of a batch act on codes that exist. With none generated the
+  // print sheet is a page of nothing and the CSV is a header row, so they are
+  // not offered rather than offered and disappointing. `act` refetches before it
+  // resolves, so this count is already the new one by the time a batch lands.
+  const hasCodes = issued > 0
+
   return (
     <section className="panel">
       <div className="panel__head">
@@ -224,8 +230,8 @@ export function CodesPanel({
 
       {!usable ? (
         <p className="hint">
-          Voting is over, so a new code cannot be redeemed. The sheet and the CSV are still here for
-          the record.
+          Voting is over, so a new code cannot be redeemed.
+          {hasCodes ? ' The sheet and the CSV are still here for the record.' : ''}
         </p>
       ) : null}
 
@@ -266,17 +272,19 @@ export function CodesPanel({
           row the line breaks landed wherever the label lengths happened to fall:
           on a phone that was three buttons on three lines at three different
           widths, which reads as an accident rather than as a set of choices. */}
-      <div className="row row--pair">
-        {/* A full page load rather than a navigate, deliberately: the print sheet
-            renders a QR per code and the organiser prints it, closes it and comes
-            back. There is no state worth carrying across. */}
-        <a className="btn btn--ghost btn--sm" href={adminPrintPath(event.id)}>
-          Print slips
-        </a>
-        <a className="btn btn--ghost btn--sm" href={`/api/admin/event/${event.id}/codes.csv`}>
-          Download CSV
-        </a>
-      </div>
+      {hasCodes ? (
+        <div className="row row--pair">
+          {/* A full page load rather than a navigate, deliberately: the print
+              sheet renders a QR per code and the organiser prints it, closes it
+              and comes back. There is no state worth carrying across. */}
+          <a className="btn btn--ghost btn--sm" href={adminPrintPath(event.id)}>
+            Print slips
+          </a>
+          <a className="btn btn--ghost btn--sm" href={`/api/admin/event/${event.id}/codes.csv`}>
+            Download CSV
+          </a>
+        </div>
+      ) : null}
 
       {/* Four lines of explanation that nobody reads during an event, kept for
           the first time somebody sets this up and folded away the rest of the
