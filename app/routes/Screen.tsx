@@ -171,6 +171,10 @@ export function Screen({ eventId }: { eventId: string }) {
         tally={payload.tally}
         maxScore={payload.maxScore}
         revealed
+        // Nothing was counted, so nothing is ranked. The heading above already
+        // says so; the column beside the rows should not contradict it by
+        // numbering six demos joint first.
+        ranked={payload.ballots > 0}
         fillDelay={ROWS_IN_AT + 0.15}
       />
     </div>

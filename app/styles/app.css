@@ -510,11 +510,15 @@ p {
 .demo {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--step) * 1.75);
+  gap: calc(var(--step) * 1.5);
   width: 100%;
   text-align: left;
   background: var(--surface);
   border: 1px solid var(--line);
+  /* Carries the scored/unscored state as well as the fill does, and carries it
+     down the edge of the card where a thumb scrolling past a list of ten can
+     count what is left without reading any of them. */
+  border-left: 3px solid var(--line-strong);
   border-radius: var(--radius-surface);
   padding: calc(var(--step) * 2);
   color: inherit;
@@ -523,9 +527,22 @@ p {
 
 .demo__head {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: calc(var(--step) * 2);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: calc(var(--step) * 1.5);
   align-items: center;
+}
+
+.demo__state {
+  font-family: var(--mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.demo[data-scored='true'] .demo__state {
+  color: var(--accent);
 }
 
 .demo__slot {
@@ -551,6 +568,7 @@ p {
 
 .demo[data-scored='true'] {
   border-color: var(--line-strong);
+  border-left-color: var(--accent);
   background: var(--surface-raised);
 }
 
@@ -560,18 +578,32 @@ p {
 
 /* ----------------------------------------------------------------- rating */
 
+/*
+ * The 1-5 scale, drawn as a staircase.
+ *
+ * Five identical boxes with five bare digits in them do not say which way is
+ * up. A voter has to decide for themselves whether 1 is best or worst, and
+ * somebody who decides wrong gives their favourite demo the score they meant
+ * for their least favourite — a mistake that is invisible, unrecoverable, and
+ * worth four points. The words at either end say it; this says it without being
+ * read, which is what matters to somebody glancing down at a phone between
+ * demos. It is also the same idea as every other quantity in this app: a bar
+ * whose length is the number.
+ */
 .rating {
   display: flex;
-  align-items: center;
-  gap: var(--step);
+  align-items: flex-end;
+  gap: 6px;
 }
 
 .rating__option {
   flex: 1;
-  /* Comfortably past the 44px touch target floor. Five of these sit side by
-     side on a phone, which is the narrowest any target in this app gets, and
-     they are pressed repeatedly by someone who is also watching a stage. */
-  min-height: 3rem;
+  /* --ramp is 0 at the bottom of the scale and 1 at the top; DemoCard computes
+     it from the range the server sent. The floor is comfortably past the 44px
+     touch target minimum, because the shortest of these is still one of five
+     targets side by side on a phone, pressed by somebody who is also watching a
+     stage. */
+  min-height: calc(3rem + var(--ramp, 0) * 0.85rem);
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: var(--radius-input);
@@ -597,39 +629,103 @@ p {
   color: var(--accent-ink);
 }
 
-/* Reserves its width whether or not it has anything to say, so a row does not
-   reflow every time a score saves. */
-.rating__state {
-  flex: 0 0 3.25rem;
-  font-size: 0.6875rem;
+/* The words the staircase is saying, for anyone who wants them stated. Sits
+   under the row rather than beside it: it used to take 3.25rem out of a phone's
+   width from a row of five targets, and it is now the card header's job. */
+.anchors {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 0.625rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-muted);
-  text-align: right;
+  color: var(--text-faint);
 }
 
 /* ------------------------------------------------------------ ballot status */
 
-/* Autosave means every card says "Saved" the moment it is scored, which on its
-   own reads as "you are done". A ballot missing one score is not counted at
-   all, so this line carries the fraction and what it means for the whole time
-   the ballot is open, not only at the end. */
-.ballotstatus {
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--warn);
-  border-radius: var(--radius-input);
-  background: var(--surface);
-  padding: calc(var(--step) * 1.5) calc(var(--step) * 2);
+/*
+ * How much of this ballot will count, pinned to the bottom of the screen.
+ *
+ * Autosave means every card says "Saved" the moment it is scored, which on its
+ * own reads as "you are done" — and a ballot missing one score is not counted
+ * at all. So this line has to be readable the whole time the ballot is open,
+ * and it used to sit at the top of a page that is ten cards long, which means
+ * it was readable for about one of them. Pinned, it is also where the thumb
+ * already is.
+ */
+.progress {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 1.25);
+  padding: calc(var(--step) * 1.5) calc(var(--step) * 2.5)
+    calc(var(--step) * 2 + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line);
+}
+
+.progress__line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--step);
+  max-width: var(--shell);
+  width: 100%;
+  margin: 0 auto;
   font-size: 0.8125rem;
   color: var(--text-muted);
 }
 
-.ballotstatus[data-complete='true'] {
-  border-left-color: var(--accent);
+.progress__line strong {
+  color: var(--text);
+  font-weight: 600;
 }
 
-.ballotstatus strong {
-  color: var(--text);
+.progress[data-complete='true'] .progress__line strong {
+  color: var(--accent);
+}
+
+/* One segment per demo rather than one continuous bar. The number that matters
+   is "how many are left", and a fraction of a bar has to be measured against
+   its own length to answer that, where four filled boxes out of six can be
+   counted. */
+.progress__track {
+  display: flex;
+  gap: 3px;
+  max-width: var(--shell);
+  width: 100%;
+  margin: 0 auto;
+}
+
+.progress__seg {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  transition: background 200ms ease;
+}
+
+.progress__seg[data-on='true'] {
+  background: var(--accent);
+}
+
+/* The one moment in a voter's whole visit worth marking: the ballot has just
+   become one that counts. Runs once, on the transition, and is gated in JS by
+   motionOk() as well as by the block at the foot of this file. */
+.progress[data-just-completed='true'] .progress__seg {
+  animation: seg-land 0.5s ease-out backwards;
+}
+
+@keyframes seg-land {
+  from {
+    transform: scaleY(2.5);
+  }
 }
 
 /* --------------------------------------------------------------- countdown */
@@ -686,19 +782,135 @@ p {
   border: 1px solid var(--line);
   border-radius: var(--radius-surface);
   background: var(--surface);
-  padding: calc(var(--step) * 3);
+  padding: calc(var(--step) * 4) calc(var(--step) * 3);
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: calc(var(--step) * 1.5);
   text-align: center;
 }
 
+.receipt > p {
+  max-width: 38ch;
+}
+
 .receipt__mark {
+  width: 68px;
+  height: 68px;
+  flex: none;
+  border-radius: 999px;
+  border: 2px solid var(--accent);
+  display: grid;
+  place-items: center;
   font-family: var(--mono);
-  font-size: 2.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--accent);
   letter-spacing: -0.02em;
+}
+
+/* What this voter actually gave, on the screen that tells them it counted.
+   It is the only record they have of it — the ballot is behind them by this
+   point — and it is the thing they will be asked about at the bar afterwards. */
+.myscores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.myscores > span {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8125rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 2px 10px;
+  color: var(--text-muted);
+}
+
+.myscores strong {
+  color: var(--text);
+}
+
+/* --------------------------------------------------------------- waiting */
+
+/*
+ * "Voting has not opened yet." used to be a paragraph on an otherwise empty
+ * page, which is indistinguishable from a page that has finished loading and
+ * has nothing else coming. It is not: this screen is polling, and it will move
+ * on by itself the moment the organiser opens voting. The pulse is that fact,
+ * made visible — the one thing on the screen that says the page is still
+ * listening.
+ */
+.waiting {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+  padding: calc(var(--step) * 4) calc(var(--step) * 3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--step) * 2);
+  text-align: center;
+}
+
+.waiting > p {
+  max-width: 38ch;
+}
+
+.waiting__pulse {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+
+.waiting__pulse::before,
+.waiting__pulse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  animation: ripple 2.6s ease-out infinite;
+}
+
+.waiting__pulse::after {
+  animation-delay: 1.3s;
+}
+
+.waiting__pulse > span {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+@keyframes ripple {
+  from {
+    transform: scale(0.25);
+    opacity: 0.85;
+  }
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+/* Nothing is moving under reduced motion, so the ring becomes a static mark
+   rather than a blank square where the animation would have been. */
+@media (prefers-reduced-motion: reduce) {
+  .waiting__pulse::before {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+
+  .waiting__pulse::after {
+    display: none;
+  }
 }
 
 /* --------------------------------------------------------------- results */
@@ -772,6 +984,14 @@ p {
   font-variant-numeric: tabular-nums;
   font-size: 1.125rem;
   font-weight: 600;
+}
+
+/* Emerald, like everything else in this app that belongs to the person holding
+   the phone. It is the one thing in these rows that is not about the room. */
+.result__mine {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ------------------------------------------------------------ big screen */
