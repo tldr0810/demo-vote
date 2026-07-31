@@ -2038,17 +2038,44 @@ p {
   padding: calc(var(--step) * 2);
 }
 
+/* Stuck to the top. Five hundred slips is a very long way to scroll back up to
+   reach the one button on the page, and the organiser reaches for it exactly
+   once — at the end, from the bottom. */
 .printbar {
+  position: sticky;
+  top: calc(var(--step) * 2);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 1.5);
+  padding: calc(var(--step) * 2);
+  margin-bottom: calc(var(--step) * 2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-surface);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+}
+
+.printbar__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: calc(var(--step) * 2);
   flex-wrap: wrap;
-  padding: calc(var(--step) * 2);
-  margin-bottom: calc(var(--step) * 2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-surface);
-  background: var(--surface);
+}
+
+.printbar__track {
+  height: 4px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.printbar__fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 200ms ease;
 }
 
 .slips {
@@ -2097,7 +2124,24 @@ p {
   color: var(--text-muted);
 }
 
+/* A slip whose QR has not been encoded yet. Holds the grid's shape so it does
+   not appear to end wherever the rendering has got to. */
+.slip--pending {
+  border-style: solid;
+  border-color: var(--line);
+  /* The height a finished slip settles at: the event name, the 190px code and
+     the line under it. Without this the grid would reflow every batch. */
+  min-height: 258px;
+  justify-content: center;
+}
+
 @media print {
+  /* The browser's own default is often half an inch, which on A4 wastes a
+     column. Stated so the sheet is the same on every machine a venue owns. */
+  @page {
+    margin: 10mm;
+  }
+
   /* Forced light. The tokens follow the organiser's system theme, and a sheet
      of slips printed out of the dark palette is a page of black rectangles.
      Most browsers drop backgrounds when printing anyway, but "most" is not the
@@ -2105,6 +2149,9 @@ p {
   body {
     background: #ffffff;
     color: #000000;
+    /* The screen keeps content clear of a phone's notch; a printer has no
+       notch, and the inset is a random margin on the page. */
+    padding: 0;
   }
 
   .printpage {
@@ -2114,6 +2161,12 @@ p {
   }
 
   .printbar {
+    display: none;
+  }
+
+  /* Nothing half-rendered goes on paper. Print is only reachable once every
+     slip is encoded, but a browser's own Ctrl-P does not wait to be allowed. */
+  .slip--pending {
     display: none;
   }
 
