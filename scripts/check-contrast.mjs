@@ -77,6 +77,7 @@ for (const [name, t] of [
   for (const token of [
     '--bg',
     '--surface',
+    '--surface-raised',
     '--line',
     '--text-muted',
     '--text-faint',
@@ -106,8 +107,16 @@ for (const [name, t] of [
   // colour together; this only asks that the two bars are not the same bar.
   check('leading bar vs an ordinary bar', contrast(t['--accent'], t['--accent-dim']), 1.5)
 
-  // Small text, on the page and on a panel, since both backgrounds occur.
-  for (const surface of ['--bg', '--surface']) {
+  // A raised surface has to be a different surface. This is the check that was
+  // missing: --surface-raised was #ffffff in the light theme, the same value as
+  // --surface, so scoring a demo changed the card's fill by nothing at all.
+  // Deliberately a low floor — this is a tonal step between two backgrounds, not
+  // a figure/ground pair, and asking for 3:1 here would make a scored card look
+  // like a different component rather than the same one filled in.
+  check('raised surface differs from the surface under it', contrast(t['--surface-raised'], t['--surface']), 1.03)
+
+  // Small text, on the page and on both surfaces, since all three occur.
+  for (const surface of ['--bg', '--surface', '--surface-raised']) {
     check(`faint text on ${surface}`, contrast(t['--text-faint'], t[surface]), 4.5)
     check(`accent text on ${surface}`, contrast(t['--accent'], t[surface]), 4.5)
     check(`countdown warn on ${surface}`, contrast(t['--warn'], t[surface]), 4.5)

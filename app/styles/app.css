@@ -42,9 +42,10 @@
      theme. It is --text-muted in both. */
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7' viewBox='0 0 11 7'%3E%3Cpath d='M1 1.25 5.5 5.75 10 1.25' fill='none' stroke='%238d929a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
-  /* Lifts the open picker off the panel behind it. Heavier here than in light
-     mode, where a dark surface cannot do the separating on its own. */
-  --picker-shadow: 0 12px 32px rgb(0 0 0 / 0.45);
+  /* Lifts anything that pops over the page — the open picker, a dialog, a toast
+     — off the surface behind it. Heavier here than in light mode, where a dark
+     surface cannot do the separating on its own. */
+  --shadow-pop: 0 12px 32px rgb(0 0 0 / 0.45);
 
   --accent: #46d98a;
   --accent-ink: #06120b;
@@ -74,14 +75,29 @@
     'Noto Sans TC', 'PingFang TC', sans-serif;
 
   --step: 8px;
+  /* A phone held in one hand, and a laptop running the event. Everything a
+     voter sees is the narrow one; only the dashboard and the print sheet ever
+     want the wide one.
+
+     There is no breakpoint token, and there cannot be: custom properties are
+     not readable from a media query. The two the dashboard uses are written out
+     at their own rules and named in a comment there. */
   --shell: 34rem;
+  --shell-wide: 76rem;
 }
 
 @media (prefers-color-scheme: light) {
   :root {
     --bg: #f4f3f0;
     --surface: #ffffff;
-    --surface-raised: #ffffff;
+    /* Was #ffffff, identical to --surface, which left every surface that means
+       "raised" indistinguishable from the one it sits on. The open picker got
+       away with it because it also carries a border and a shadow; the scored
+       demo card did not, so on the light side scoring a demo changed nothing
+       about the card's fill at all. A warm tint rather than a shadow: the fill
+       is what the dark theme uses, and the two themes should be saying the same
+       thing in their own palettes. */
+    --surface-raised: #f6f4ef;
     --line: #e0ded8;
     --line-strong: #c8c5bd;
 
@@ -91,7 +107,7 @@
 
     --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7' viewBox='0 0 11 7'%3E%3Cpath d='M1 1.25 5.5 5.75 10 1.25' fill='none' stroke='%235c6067' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
-    --picker-shadow: 0 10px 28px rgb(22 24 27 / 0.14);
+    --shadow-pop: 0 10px 28px rgb(22 24 27 / 0.14);
 
     --accent: #0e7a4b;
     --accent-ink: #ffffff;
@@ -163,7 +179,7 @@ body {
 }
 
 .shell--wide {
-  max-width: 72rem;
+  max-width: var(--shell-wide);
 }
 
 .stack {
@@ -299,7 +315,7 @@ p {
   background: var(--surface-raised);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-input);
-  box-shadow: var(--picker-shadow);
+  box-shadow: var(--shadow-pop);
   max-height: 15rem;
   overflow-y: auto;
   transform-origin: top center;
@@ -853,6 +869,191 @@ p {
   grid-template-columns: 2.5rem 1fr 1fr;
   gap: var(--step);
   align-items: center;
+}
+
+/* --------------------------------------------------------------- skeleton */
+
+/*
+ * The shape of what is loading, rather than the word "Loading".
+ *
+ * Every screen in this app used to answer its first render with a single 11px
+ * uppercase label, which on a phone is a nearly blank page — and a nearly blank
+ * page during an event reads as a page that failed. A block the size of the
+ * thing that is coming says the same thing without the room wondering.
+ */
+.skeleton {
+  background: var(--line);
+  border-radius: var(--radius-input);
+  /* Its own opacity pulse rather than a moving sheen: a sweeping gradient is a
+     second animation style this app does not otherwise have, and it costs a
+     repaint per frame on the phones this is built for. */
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* ----------------------------------------------------------------- toast */
+
+/*
+ * Confirmation for actions whose effect is invisible.
+ *
+ * Copying the vote link and generating codes both used to happen in complete
+ * silence, and silence after a tap is indistinguishable from a tap that missed.
+ * Deliberately bottom-centre on a phone and bottom-right on a laptop: it must
+ * never sit under the thumb on the sticky action bar.
+ */
+.toasts {
+  position: fixed;
+  z-index: 40;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom) + var(--step) * 11);
+  display: flex;
+  flex-direction: column;
+  gap: var(--step);
+  width: min(24rem, calc(100vw - var(--step) * 4));
+  /* The list is a layer over the page, not a region of it. Only the toasts
+     themselves take pointer events, so nothing underneath goes dead. */
+  pointer-events: none;
+}
+
+@media (min-width: 56rem) {
+  .toasts {
+    left: auto;
+    right: calc(var(--step) * 3);
+    bottom: calc(var(--step) * 3);
+    transform: none;
+  }
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--step) * 1.5);
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-input);
+  padding: calc(var(--step) * 1.5) calc(var(--step) * 2);
+  box-shadow: var(--shadow-pop);
+  font-size: 0.875rem;
+  animation: toast-in 0.22s ease-out;
+}
+
+.toast[data-tone='error'] {
+  border-left-color: var(--danger);
+}
+
+.toast__label {
+  color: var(--accent);
+}
+
+.toast[data-tone='error'] .toast__label {
+  color: var(--danger);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* ---------------------------------------------------------------- dialog */
+
+/*
+ * Replaces window.confirm for the two decisions that cannot be undone.
+ *
+ * The same argument the picker and the archive toggle already make: a native
+ * dialogue is drawn by the operating system, so it arrives looking like macOS on
+ * one laptop and Windows on the next. It also cannot say anything beyond one
+ * line of text, and both of these decisions have a cost worth spelling out —
+ * how long is left, and how many people it takes the choice away from.
+ */
+/* A native <dialog> opened with showModal(), which is where the focus trap, the
+   Escape key and the inertness of the page behind it come from. Nothing about
+   it is drawn by the operating system — the element and its backdrop are both
+   ours — so the argument against a native <select> does not apply here. */
+.dialog {
+  width: min(30rem, calc(100vw - var(--step) * 6));
+  max-width: none;
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-surface);
+  padding: calc(var(--step) * 3.5);
+  box-shadow: var(--shadow-pop);
+}
+
+.dialog[open] {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 2);
+  animation: dialog-in 0.2s ease-out;
+}
+
+.dialog::backdrop {
+  background: rgb(0 0 0 / 0.55);
+  animation: scrim-in 0.16s ease-out;
+}
+
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+
+.dialog h2 {
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+  font-weight: 620;
+}
+
+.dialog p {
+  font-size: 0.9375rem;
+}
+
+/* The numbers the decision turns on, stated rather than described. */
+.dialog__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--step) * 4);
+  padding: calc(var(--step) * 1.75) 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.dialog__fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dialog__fact > strong {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.25rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--step);
+  justify-content: flex-end;
 }
 
 /* ---------------------------------------------------------------- a11y */

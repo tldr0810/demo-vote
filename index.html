@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="color-scheme" content="dark" />
+    <!-- Both, and in the same order as `color-scheme` in app.css. This said
+         `dark` alone while the stylesheet said `dark light`, so the browser was
+         told to force the dark palette on the form controls and scrollbars of a
+         page whose own tokens had already switched to the light one. -->
+    <meta name="color-scheme" content="dark light" />
     <meta name="robots" content="noindex, nofollow" />
     <title>Demo Vote</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🗳️</text></svg>" />
