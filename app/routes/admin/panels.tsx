@@ -258,13 +258,22 @@ export function CodesPanel({
         >
           Generate {count}
         </button>
+      </div>
+
+      {/* The two ways out of a batch, on a row of their own rather than trailing
+          the generate control. They are the same kind of thing as each other and
+          a different kind of thing from making codes, and left in one wrapping
+          row the line breaks landed wherever the label lengths happened to fall:
+          on a phone that was three buttons on three lines at three different
+          widths, which reads as an accident rather than as a set of choices. */}
+      <div className="row row--pair">
         {/* A full page load rather than a navigate, deliberately: the print sheet
             renders a QR per code and the organiser prints it, closes it and comes
             back. There is no state worth carrying across. */}
-        <a className="btn btn--ghost" href={adminPrintPath(event.id)}>
-          Print QR slips
+        <a className="btn btn--ghost btn--sm" href={adminPrintPath(event.id)}>
+          Print slips
         </a>
-        <a className="btn btn--ghost" href={`/api/admin/event/${event.id}/codes.csv`}>
+        <a className="btn btn--ghost btn--sm" href={`/api/admin/event/${event.id}/codes.csv`}>
           Download CSV
         </a>
       </div>

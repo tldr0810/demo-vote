@@ -288,9 +288,12 @@ p {
 }
 
 /* A number that is a quantity, not a form field: it wants to be the width of
-   the number rather than the width of the panel. */
+   the number rather than the width of the panel. Four digits and the spinner is
+   the whole requirement — the largest batch is 5000 — and the 7rem this used to
+   be was wide enough to push "Generate 100" onto a line of its own on every
+   phone, separating the button from the number it acts on. */
 .input--count {
-  width: 7rem;
+  width: 5.5rem;
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
 }
@@ -1152,6 +1155,25 @@ p {
   flex-wrap: wrap;
   gap: var(--step);
   align-items: center;
+}
+
+/* Two actions of the same kind, in equal columns rather than left to wrap.
+   Wrapping sized each button to its own label, so a narrow panel broke them into
+   a column of different widths that read as an accident; equal columns are the
+   same layout decision at every width, and the only thing that changes is how
+   many of them fit.
+
+   8.75rem is the wider of the two labels plus its own padding. Tying the track
+   minimum to the text is what stops a second column appearing before the words
+   in it fit: a phone too narrow for the pair gets one full-width column instead
+   of two clipped ones. The ceiling is the other end of the same idea — without
+   it the columns keep growing with the panel, and on a laptop these end up drawn
+   wider than the primary control above them. */
+.row--pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.75rem, 1fr));
+  align-items: stretch;
+  max-width: 26rem;
 }
 
 .panel__head {
