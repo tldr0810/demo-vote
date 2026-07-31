@@ -150,9 +150,23 @@ export function Admin() {
   return (
     <>
       <header className="appbar">
-        <span className="appbar__mark">
+        {/* The wordmark is also the way back to the event list. A logo in the
+            top-left corner is the one control every organiser already knows how
+            to use without being told, and on the dashboard it saves a trip to
+            the "← All events" button further along the bar. Same
+            modified-click rule as every other link here: the href is real, so
+            cmd-click opens the list in a new tab. */}
+        <a
+          className="appbar__mark"
+          href={ADMIN_HOME}
+          onClick={(clicked) => {
+            if (clicked.metaKey || clicked.ctrlKey || clicked.shiftKey) return
+            clicked.preventDefault()
+            navigate(ADMIN_HOME)
+          }}
+        >
           Demo<span>·</span>Vote
-        </span>
+        </a>
         <span className="label appbar__role">Organiser</span>
 
         <span className="appbar__spacer" />

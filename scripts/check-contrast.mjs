@@ -79,6 +79,8 @@ for (const [name, t] of [
     '--surface',
     '--surface-raised',
     '--line',
+    '--line-strong',
+    '--text',
     '--text-muted',
     '--text-faint',
     '--accent',
@@ -87,6 +89,7 @@ for (const [name, t] of [
     '--warn',
     '--danger',
     '--danger-ink',
+    '--info',
   ]) {
     if (!t[token]) {
       console.error(`FAIL ${name}: ${token} was not found in app.css`)
@@ -121,7 +124,14 @@ for (const [name, t] of [
     check(`accent text on ${surface}`, contrast(t['--accent'], t[surface]), 4.5)
     check(`countdown warn on ${surface}`, contrast(t['--warn'], t[surface]), 4.5)
     check(`countdown urgent on ${surface}`, contrast(t['--danger'], t[surface]), 4.5)
+    // The revealed pill. 11px uppercase, so it is held to the small-text floor
+    // like every other pill in the set.
+    check(`revealed pill on ${surface}`, contrast(t['--info'], t[surface]), 4.5)
   }
+
+  // The closed pill is the one that is filled rather than outlined, so its label
+  // is read against --line-strong and not against the surface behind it.
+  check('closed pill label', contrast(t['--text'], t['--line-strong']), 4.5)
 
   // Two greys with different names have to be two greys, or the app has one
   // grey wearing two token names and no tonal ladder at all.
