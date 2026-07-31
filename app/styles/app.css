@@ -322,6 +322,24 @@ p {
   min-width: 0;
 }
 
+/*
+ * Not on a phone.
+ *
+ * The app bar on an event page carries the mark, "← All events", this, and Sign
+ * out. At 390px that is more than fits, and because this is the only shrinkable
+ * item in the row it was the one that paid: it collapsed to a stub reading "Many"
+ * with the label printed over the chevron.
+ *
+ * Hiding it loses nothing a phone needs. The picker is a laptop affordance for
+ * hopping between parallel tracks; "← All events" is immediately beside it, and
+ * every event on the list it leads to is one tap.
+ */
+@media (max-width: 62rem) {
+  .picker-wrap {
+    display: none;
+  }
+}
+
 .picker__button--compact {
   appearance: none;
   width: 100%;
@@ -1392,13 +1410,12 @@ p {
     border-top: 1px solid var(--line);
   }
 
-  /* The one that matters takes the room; New event stays a ghost beside it. */
-  .eventbar__actions > .btn:first-child {
+  /* There is only ever one action in here now — the four statuses form a line and
+     one step of it is available at a time — so it takes the whole width. New
+     event used to sit beside it as a ghost; it is on /admin with the rest of the
+     set of events. */
+  .eventbar__actions > .btn {
     flex: 1;
-  }
-
-  .eventbar__new {
-    flex: none;
   }
 }
 
@@ -1438,13 +1455,81 @@ p {
   }
 }
 
+/* --------------------------------------------------------------- the band */
+
+/*
+ * Turnout, across the page and under the event bar.
+ *
+ * It was a panel at the top of the left column, which is what made the two
+ * columns different heights: the left one carried turnout, the QR, the codes and
+ * Manage events, and the right one carried the tally alone. Turnout is not a
+ * companion to the tally, though — it is the summary of the whole event, three
+ * numbers and three bars — so lying it on its side under the bar costs a third of
+ * the height, gives the bars three times the length, and takes the left column
+ * down to something the right one can match.
+ *
+ * Not sticky, deliberately. Only the event bar is: an organiser needs the clock
+ * wherever the page is scrolled, and they do not need the funnel.
+ */
+.dashband {
+  max-width: var(--shell-wide);
+  margin: 0 auto;
+  padding: calc(var(--step) * 2.5);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 2);
+  border-bottom: 1px solid var(--line);
+}
+
+/* Quieter than a panel head. A band is not a panel and should not look like one
+   that has lost its border. */
+.bandhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--step);
+}
+
+.bandhead > h2 {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* The same three rows, side by side. Each keeps its own track, so the funnel is
+   still read as a funnel — every step down is people who did not take the next
+   one — just left to right.
+
+   Written with both classes rather than one. `.funnel` sets `flex-direction:
+   column` and is defined further down this file, so a single-class modifier up
+   here loses the tie on source order and the band renders stacked. */
+.funnel.funnel--wide {
+  flex-direction: row;
+  gap: calc(var(--step) * 4);
+}
+
+.funnel--wide > .funnel__row {
+  flex: 1;
+  min-width: 0;
+  align-content: start;
+  gap: calc(var(--step) * 0.75) var(--step);
+}
+
+.funnel--wide .funnel__value {
+  font-size: 1.75rem;
+}
+
 /* ---------------------------------------------------------------- the grid */
 
 .dash {
   display: grid;
-  /* The tally gets the wider half: its rows carry a name, a bar, a total and an
-     average, and it is the half anybody is actually watching. */
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  /* Equal halves. This was 1fr / 1.15fr, tilted towards the tally to make up for
+     a left column carrying four panels against its one. With turnout in the band
+     above and Manage events on /admin, the two sides are within a panel of each
+     other and the tilt is just a tilt. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: calc(var(--step) * 2.5);
   max-width: var(--shell-wide);
   margin: 0 auto;
@@ -1460,6 +1545,24 @@ p {
   min-width: 0;
 }
 
+/* The QR and the codes: things done to the event rather than things watched. It
+   sticks so that a twenty-demo tally scrolls past it instead of leaving a column
+   of dead space beside it. */
+.dash__col--side {
+  position: sticky;
+  /* A comfortable offset rather than a measurement. The event bar above is sticky
+     and is not a fixed height — see .topbars — so there is no number here that
+     would be right on every machine. */
+  top: calc(var(--step) * 14);
+}
+
+/* Turnout is in the band on a laptop, so the pane holding the phone's copy of it
+   must not also be on screen. The pair of rules — this and .dashband below —
+   means exactly one of the two mount points is ever visible. */
+.pane[data-pane='turnout'] {
+  display: none;
+}
+
 @media (max-width: 62rem) {
   .dash {
     grid-template-columns: minmax(0, 1fr);
@@ -1473,6 +1576,10 @@ p {
     display: contents;
   }
 
+  .dash__col--side {
+    position: static;
+  }
+
   .pane {
     display: none;
   }
@@ -1481,6 +1588,211 @@ p {
   .dash[data-pane='turnout'] .pane[data-pane='turnout'],
   .dash[data-pane='codes'] .pane[data-pane='codes'] {
     display: flex;
+  }
+
+  /*
+   * Not on a phone.
+   *
+   * Three bars across 390px are 90px each and say nothing, and a band above the
+   * tab strip would be content sitting still while the tabs under it switch. So
+   * the phone keeps exactly what it had: Turnout is one of three tabs, and the
+   * rule above hands it back its pane.
+   */
+  .dashband {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------- event list */
+
+/*
+ * The organiser's front page.
+ *
+ * A list, not a set of cards: rules between rows, numbers in the mono face,
+ * nothing raised. The whole app is a tally sheet and a list of events is the same
+ * kind of object as a list of demos, so it is drawn the same way.
+ */
+
+.evlist {
+  display: flex;
+  flex-direction: column;
+}
+
+.evrow {
+  position: relative;
+  display: grid;
+  /* name · status · the three counts · the row's own manage button */
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: calc(var(--step) * 2.5);
+  padding: calc(var(--step) * 2) 0;
+  border-top: 1px solid var(--line);
+}
+
+.evlist > .evrow:first-child {
+  border-top: 0;
+}
+
+.evrow:hover {
+  /* Bleeds past the panel's padding so the whole row lights up, rather than a
+     strip inside it with a margin of unlit panel either side. */
+  box-shadow: inset 0 0 0 100vmax color-mix(in srgb, var(--surface-raised) 60%, transparent);
+}
+
+.evrow__id {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 0.5);
+  min-width: 0;
+}
+
+.evrow__open {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: inherit;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The whole row is the hit area, laid over it by a stretched pseudo-element
+   rather than by wrapping the row in an <a>. Wrapping would put the Archive
+   button inside a link: invalid HTML, and a screen reader would read the
+   button's label as part of the link's name. */
+.evrow__open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+/* Above the stretched hit area, so Archive is still its own target. */
+.evrow__manage > .btn {
+  position: relative;
+  z-index: 1;
+}
+
+/* The three fixed cells below all carry a min-width, and that is what makes the
+   list read as a table. Each row is its own grid, so an `auto` column is measured
+   per row: a pill saying Draft and one saying Voting open are different widths,
+   and without a floor under them every count in the list sits a few pixels off
+   from the one above it. */
+.evrow__state {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(var(--step) * 1.5);
+  min-width: 8.5rem;
+  flex: none;
+}
+
+.evrow__stats {
+  display: flex;
+  gap: calc(var(--step) * 3);
+  flex: none;
+}
+
+.evrow__stats > span {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  /* Wide enough for the widest label under it — "redeemed" — so the three columns
+     of counts line up however many digits each one has. */
+  min-width: 4.25rem;
+}
+
+.evrow__stats b {
+  font-family: var(--mono);
+  font-size: 1.125rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.evrow__stats i {
+  font-style: normal;
+}
+
+/* Holds its width on the rows with nothing to put in it — a draft and a live
+   event cannot be filed away — so the column does not appear and disappear as the
+   eye goes down the list. */
+.evrow__manage {
+  flex: none;
+  min-width: 5.5rem;
+  text-align: right;
+}
+
+/* The event being run today, given the accent rule and its action spelled out. */
+.evfeature {
+  border-color: var(--accent-dim);
+}
+
+.evrow--feature {
+  border-top: 0;
+  padding: 0;
+}
+
+.evrow--feature:hover {
+  box-shadow: none;
+}
+
+/* Two of these can be on screen at once — parallel tracks — so they need the rule
+   between them that the list rows get. */
+.evrow--feature + .evrow--feature {
+  border-top: 1px solid var(--line);
+  padding-top: calc(var(--step) * 2);
+  margin-top: calc(var(--step) * 2);
+}
+
+.evrow--feature .evrow__open {
+  font-size: 1.125rem;
+}
+
+.evrow__go {
+  flex: none;
+}
+
+.evlist__foot {
+  border-top: 1px solid var(--line);
+  padding-top: calc(var(--step) * 1.75);
+}
+
+@media (max-width: 62rem) {
+  .evrow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--step) calc(var(--step) * 2);
+    align-items: start;
+  }
+
+  /* The status keeps the right-hand column on the first line; the counts drop
+     under the name and run across. */
+  .evrow__state {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .evrow__stats {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    gap: calc(var(--step) * 2.5);
+  }
+
+  .evrow__stats > span {
+    align-items: flex-start;
+    min-width: 0;
+  }
+
+  .evrow__manage {
+    grid-column: 1 / -1;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .evrow--feature {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { EventStatus } from '../app/api'
 import {
+  BOOT_RETRY_MS,
   DRAFT_POLL_MS,
   LIVE_POLL_MS,
   pollIntervalFor,
@@ -92,12 +93,13 @@ describe('following an event from a phone', () => {
 })
 
 describe('how often a phone asks', () => {
-  it('watches a draft, but more slowly than a live window', () => {
-    // Watching a draft at the live rate would put the heaviest traffic of the
-    // whole event into the stretch where nothing is happening and where phones
-    // sit the longest. The reveal rate is already the slow one; this is slower.
+  it('watches a draft at least as closely as a live window', () => {
+    // This asserted the opposite until the arithmetic got done. A draft poll is
+    // one five-field GET with no tally and no session work behind it, and the
+    // interval was buying a twenty-second worst case on the single transition in
+    // the whole event that has a room standing around waiting for it.
     expect(pollIntervalFor('draft')).toBe(DRAFT_POLL_MS)
-    expect(DRAFT_POLL_MS).toBeGreaterThan(LIVE_POLL_MS)
+    expect(DRAFT_POLL_MS).toBeLessThanOrEqual(LIVE_POLL_MS)
   })
 
   it('keeps the live rate for every state a room is actually voting or waiting in', () => {
@@ -106,13 +108,30 @@ describe('how often a phone asks', () => {
     }
   })
 
-  it('stays inside what a venue wifi was sized for', () => {
-    // The number that matters is requests per phone per minute, not the
-    // interval. Adding the draft must not cost more than the window it is
-    // waiting for already does — so if this ever fails, the fix is a longer
-    // draft interval, not a bigger number here.
-    const perMinute = (ms: number) => 60000 / ms
-    expect(perMinute(DRAFT_POLL_MS)).toBeLessThan(perMinute(LIVE_POLL_MS))
-    expect(perMinute(DRAFT_POLL_MS)).toBeLessThanOrEqual(3)
+  it('opens a ballot inside the time it takes to say so out loud', () => {
+    // The ceiling that replaces the old wifi one, and the reason this number is
+    // what it is. A phone nobody picked up has to reach the ballot before the
+    // organiser has finished the sentence announcing it, or the room spends the
+    // first part of the window watching people refresh. `visibilitychange`
+    // covers every phone that did get picked up; this is the floor under the
+    // rest.
+    expect(DRAFT_POLL_MS).toBeLessThanOrEqual(5000)
+  })
+
+  it('costs a room of phones less than the window it is waiting for', () => {
+    // The load question, asked the way it actually lands: requests per second
+    // across the room, not per phone per minute. A draft is watched by everybody
+    // holding a slip; the open window is watched by the same phones, and every
+    // one of those polls is doing strictly more work at the other end.
+    const perSecond = (phones: number, ms: number) => (phones * 1000) / ms
+    expect(perSecond(200, DRAFT_POLL_MS)).toBeLessThanOrEqual(50)
+  })
+
+  it('retries a page that never resolved an event at all', () => {
+    // Not an interval on an event — an interval on not having one. Nothing else
+    // in this file recovers from it, because everything else needs an id to
+    // poll, and this is the state a dropped first request leaves a phone in.
+    expect(BOOT_RETRY_MS).toBeGreaterThan(0)
+    expect(BOOT_RETRY_MS).toBeLessThanOrEqual(LIVE_POLL_MS)
   })
 })

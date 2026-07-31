@@ -91,6 +91,10 @@ are done".
    stolen code — scores overwrite rather than accumulate — but somebody else's
    ballot can be overwritten.)
 5. **After the demos.** Press "Open voting". The countdown starts at that moment.
+   Everybody who scanned their slip early is sitting on a "voting opens shortly"
+   screen, and every one of those moves to its own ballot without being touched:
+   immediately for a phone somebody picks up when you say so, and within five
+   seconds for one left face-up on a table. Nothing needs refreshing here either.
 6. **While voting.** The dashboard refreshes every two seconds and shows codes
    issued, redeemed, and how many ballots have a score for every demo. The gap
    between the last two is the people who started scoring and did not finish,
@@ -194,10 +198,10 @@ fresh print run each time.
 
 ### Filing old events away
 
-A finished event can be archived from `/admin`, and unarchived again. Archived
-events drop out of the dropdown, which hides them behind a "Show archived"
-toggle, and out of what `/` resolves to. Archive everything and the bare address
-says there is no event, which is the truthful answer.
+A finished event can be archived from its row in the `/admin` list, and
+unarchived again. Archived events drop out of that list, which hides them behind
+a "Show archived" toggle, and out of what `/` resolves to. Archive everything and
+the bare address says there is no event, which is the truthful answer.
 
 Archiving is a nullable `events.archived_at`, **not** a fifth `status` value.
 `status` is a one-way machine that `getCurrentEvent` sorts on, so an `archived`
@@ -208,7 +212,7 @@ a room is being told to scan for it is exactly the failure that rule prevents.
 
 The cycle each time:
 
-1. `/admin` → **New event** → name it, enter the line-up, set the window
+1. `/admin` → **Create an event** → name it, enter the line-up, set the window
 2. Generate codes, print the QR slips (plus spares), cut them up
 3. Run the event (open, score, close, reveal)
 4. Leave it. The next event starts at step 1 with codes and QRs of its own
@@ -247,7 +251,7 @@ scan slip ─▶ /v/:eventId?c=CODE ─▶ POST /api/session ─▶ signed cooki
             score each demo 1-5 ─▶ POST /api/score ─▶ upsert ────┤
                     (once per adjustment, saved as you go)        ▼
                                   UNIQUE(code, demo_id) ─▶ one row per demo
-organiser ─▶ /admin ─▶ polls every 2s ─▶ ranked bars
+organiser ─▶ /admin/event/:id ─▶ polls every 2s ─▶ ranked bars
                     └─ open / close / reveal
                                   │
        after the reveal ──────────┼──▶ projector  /screen/:eventId
@@ -265,6 +269,9 @@ organiser ─▶ /admin ─▶ polls every 2s ─▶ ranked bars
 | `worker/data.ts` | D1 queries, including the upsert in `saveScore` |
 | `db/schema.ts` | Four tables: events, demos, codes, votes |
 | `app/voteUrl.ts` | How a code travels in a QR URL, and how it is read back |
+| `app/routes/Admin.tsx` | The organiser's shell: session, event list, which screen is on |
+| `app/routes/admin/` | The screens themselves — event list, one event, set-up form |
+| `app/adminRoute.ts` | Which organiser screen a path names |
 | `app/routes/PrintCodes.tsx` | The sheet of per-attendee QR slips |
 | `app/` | React front end, six screens |
 | `app/motion.ts` | GSAP setup and the reduced-motion check |
