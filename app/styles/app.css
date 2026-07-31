@@ -1679,18 +1679,65 @@ p {
   grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: calc(var(--step) * 2.5);
-  padding: calc(var(--step) * 2) 0;
-  border-top: 1px solid var(--line);
+  /* Half the panel's own padding wider than the list on each side, so the hover
+     band has somewhere to reach; the inline padding puts the content back on the
+     column it was on, so nothing in the row moves. */
+  margin-inline: calc(var(--step) * -1.25);
+  padding: calc(var(--step) * 2) calc(var(--step) * 1.25);
+  border-radius: var(--radius-input);
+  transition: background-color 120ms ease;
 }
 
-.evlist > .evrow:first-child {
-  border-top: 0;
+/* The rule between rows, drawn as a line rather than as this box's border.
+   A border would now be as wide as the row's box, which is wider than the list,
+   so the rules would hang past "All events" above them. Drawing it separately
+   also lets it get out of the way on hover: a full-width line across the top
+   edge of a rounded band cuts the corners back off it. */
+.evrow::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  inset-inline: calc(var(--step) * 1.25);
+  height: 1px;
+  background: var(--line);
+  transition: opacity 120ms ease;
 }
 
-.evrow:hover {
-  /* Bleeds past the panel's padding so the whole row lights up, rather than a
-     strip inside it with a margin of unlit panel either side. */
-  box-shadow: inset 0 0 0 100vmax color-mix(in srgb, var(--surface-raised) 60%, transparent);
+/* :focus-within as well as :hover, so tabbing through the list lights the same
+   band a mouse would. The row is the click target; a keyboard should get to see
+   which row it is on. */
+.evlist > .evrow:first-child::before,
+.evrow:hover::before,
+.evrow:hover + .evrow::before,
+.evrow:focus-within::before,
+.evrow:focus-within + .evrow::before {
+  opacity: 0;
+}
+
+/* The row lights up as a rounded band that reaches into the panel's padding on
+   both sides.
+ *
+ * It was an inset box-shadow with a 100vmax spread, on the theory that the
+ * spread would carry it past the panel's padding. It does not: an inset shadow
+ * is clipped to the box that casts it, so what it actually drew was a
+ * square-ended slab exactly as wide as the list, starting and stopping in the
+ * middle of the panel. That reads as a highlight that has been cut off rather
+ * than one that ends.
+ *
+ * The negative margin is what gets the extra width, and the padding puts the
+ * content back where it was, so nothing in the row moves. The separators are
+ * drawn on .evrow__rule instead of on the row itself for the same reason: a
+ * border on this box would now be as wide as the band, and the rules would hang
+ * past "All events" above them. */
+.evrow:hover,
+.evrow:focus-within {
+  /* Tinted with the text colour rather than filled with --surface-raised, so
+     the same one line works in both themes: the tint darkens on the light side
+     and lightens on the dark one. The old fill was 60% of --surface-raised,
+     which on white is a 1.06:1 step — invisible on a laptop screen, and the
+     hover has to be visible because it is the only thing saying the whole row
+     is the click target. */
+  background: color-mix(in srgb, var(--text) 5%, transparent);
 }
 
 .evrow__id {
@@ -1783,13 +1830,21 @@ p {
   border-color: var(--accent-dim);
 }
 
+/* The featured row is already the only thing in its own panel, so it has no
+   band and no rule of its own: there is nothing next to it to be separated
+   from, and lighting up the one row in a panel says nothing. */
 .evrow--feature {
-  border-top: 0;
+  margin-inline: 0;
   padding: 0;
 }
 
-.evrow--feature:hover {
-  box-shadow: none;
+.evrow--feature::before {
+  display: none;
+}
+
+.evrow--feature:hover,
+.evrow--feature:focus-within {
+  background: none;
 }
 
 /* Two of these can be on screen at once — parallel tracks — so they need the rule
