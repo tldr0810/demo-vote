@@ -2608,6 +2608,16 @@ p {
   color: var(--text-muted);
 }
 
+/* The characters behind the QR. Monospace and wide-tracked because this is
+   read a character at a time — off a slip, into a phone or down a table — and
+   the alphabet is already chosen so no two characters look alike. */
+.slip__code {
+  font-family: var(--mono);
+  font-size: 0.9375rem;
+  letter-spacing: 0.12em;
+  color: var(--text);
+}
+
 .slip__qr {
   /* Large, because it is the only thing on the slip that does anything, and a
      bigger target is a faster scan for a phone held at an angle in low light. */
@@ -2631,9 +2641,10 @@ p {
 .slip--pending {
   border-style: solid;
   border-color: var(--line);
-  /* The height a finished slip settles at: the event name, the 190px code and
-     the line under it. Without this the grid would reflow every batch. */
-  min-height: 258px;
+  /* The height a finished slip settles at: the event name, the printed code,
+     the 190px QR and the line under it. Without this the grid would reflow
+     every batch. */
+  min-height: 288px;
   justify-content: center;
 }
 
@@ -2689,5 +2700,11 @@ p {
   .slip__event,
   .slip__hint {
     color: #444444;
+  }
+
+  /* Full black, unlike the two muted lines around it: this one is read
+     character by character, off paper, under whatever light the venue has. */
+  .slip__code {
+    color: #000000;
   }
 }
