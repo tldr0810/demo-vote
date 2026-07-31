@@ -18,6 +18,19 @@ type Slip = { code: string; dataUri: string }
 const BATCH = 24
 
 /**
+ * Splits a code into halves for reading off paper.
+ *
+ * Eight unbroken characters is one long string to keep your place in, whether
+ * you are reading it aloud to somebody stuck or checking it against the CSV.
+ * The gap is presentation only — typed input has its spaces stripped before
+ * lookup, so a code copied from a slip with the gap in it still works.
+ */
+function groupCode(code: string): string {
+  const half = Math.ceil(code.length / 2)
+  return `${code.slice(0, half)} ${code.slice(half)}`
+}
+
+/**
  * The sheet of personal QR codes, cut up and handed out at check-in.
  *
  * One slip per attendee, each carrying its own code. Scanning it lands that
@@ -178,16 +191,17 @@ export function PrintCodes({ eventId }: { eventId: string }) {
       </div>
 
       <div className="slips">
-        {/* The code itself is not printed. It was here as the fallback for a
-            slip that would not scan, but the fallback that actually works is a
-            spare slip: the recovery for a bad piece of paper is another piece of
-            paper, not eight characters typed into a phone in a dark room. The
-            code still exists — it is in the CSV and on the dashboard — so a
-            steward can read one out for somebody genuinely stuck, and the entry
-            screen is still there to receive it. */}
+        {/* The code is printed under the event name. A QR is opaque to a person
+            holding it: once the sheet is cut up, two slips from two batches are
+            indistinguishable, and a slip that has been handed out and come back
+            cannot be matched to the row in the CSV it came from. Printing the
+            characters makes the paper self-describing — which is also the
+            fallback for a slip that will not scan, since the entry screen still
+            takes a typed code. */}
         {slips.map((slip) => (
           <div className="slip" key={slip.code}>
             <div className="slip__event">{event?.name}</div>
+            <div className="slip__code">{groupCode(slip.code)}</div>
             <img className="slip__qr" src={slip.dataUri} alt="" width={190} height={190} />
             <div className="slip__hint">Scan to score the demos</div>
           </div>

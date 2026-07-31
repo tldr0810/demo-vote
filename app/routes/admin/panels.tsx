@@ -293,9 +293,9 @@ export function CodesPanel({
         <summary>How the slips work</summary>
         <p>
           One code per person. Print the sheet and hand a slip to each person at check-in — scanning
-          it opens their ballot with nothing to type. Print a few spares: the slip carries its code
-          in the QR only, so a slip that will not scan is replaced rather than typed in. The codes
-          themselves are in the CSV, for reading one out to somebody genuinely stuck.
+          it opens their ballot with nothing to type. Each slip also prints its code in writing, so
+          a sheet can be matched back to a batch and a slip that will not scan can be typed in
+          instead. Print a few spares. The same codes are in the CSV.
         </p>
       </details>
 
