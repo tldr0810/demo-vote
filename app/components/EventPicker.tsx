@@ -1,6 +1,9 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 
 type PickerOption = { id: string; label: string }
+
+/** The app bar's inline padding: the closest the popup may come to the edge. */
+const EDGE_GUTTER = 16
 
 /**
  * The event picker: a listbox rather than a native `<select>`.
@@ -80,6 +83,34 @@ export function EventPicker({
     document.addEventListener('pointerdown', onPointerDown)
     return () => document.removeEventListener('pointerdown', onPointerDown)
   }, [open])
+
+  // The compact popup is as wide as its longest label rather than as wide as the
+  // button, which is the one shrinkable item in the app bar and shows its own
+  // label ellipsised — sizing the open list to that measurement was what wrapped
+  // every row onto two lines. Growing to fit needs a limit, though, and the
+  // limit is the room between the popup's right edge and the left edge of the
+  // window: the popup hangs off a control near the right of the bar, so it grows
+  // leftwards, and CSS has no length for that gap. Measured here, capped in CSS.
+  // Layout effect rather than effect: this runs before the browser paints, so
+  // the list is never seen at the wrong width.
+  useLayoutEffect(() => {
+    if (!open || !compact) return
+
+    const list = listRef.current
+    const wrap = wrapRef.current
+    if (!list || !wrap) return
+
+    function fit() {
+      if (!list || !wrap) return
+      const room = Math.round(wrap.getBoundingClientRect().right) - EDGE_GUTTER
+      list.style.setProperty('--picker-room', `${Math.max(0, room)}px`)
+    }
+
+    fit()
+    // Rotating a phone moves the anchor without remounting the list.
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [open, compact])
 
   // Arrowing past the fold has to bring the row with it.
   useEffect(() => {
